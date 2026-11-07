@@ -32,7 +32,7 @@ export function TopBar({ user }: Props) {
               <span className={styles.persona}>
                 {user.firstName} {user.lastName} — {user.role}
               </span>
-              <button className={styles.bell} title="Notifications">🔔</button>
+              <button className={styles.bell} title="Notifications" data-voice-ignore>🔔</button>
               <button className={styles.btn} onClick={logout}>Sign out</button>
             </>
           ) : (

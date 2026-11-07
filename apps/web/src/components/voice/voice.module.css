@@ -1,0 +1,49 @@
+.widget {
+  position: fixed;
+  right: max(1rem, env(safe-area-inset-right));
+  bottom: max(1rem, env(safe-area-inset-bottom));
+  z-index: 60;
+  display: flex;
+  flex-direction: column-reverse;
+  align-items: flex-end;
+  gap: .5rem;
+  font-size: .88rem;
+}
+.widget button, .form input {
+  border: 1px solid var(--line-2);
+  border-radius: .5rem;
+  padding: .45rem .7rem;
+  background: var(--bg-3);
+}
+.widget .launch {
+  border-color: var(--blue-2);
+  background: var(--bg-2);
+  font-weight: 700;
+  box-shadow: 0 4px 20px #0006;
+}
+.widget button:disabled { opacity: .6; cursor: default; }
+.panel {
+  display: grid;
+  gap: .65rem;
+  width: min(22rem, calc(100vw - 2rem));
+  max-height: min(32rem, calc(100dvh - 5rem));
+  overflow: auto;
+  padding: .9rem;
+  border: 1px solid var(--line-2);
+  border-radius: .7rem;
+  background: var(--bg-2);
+  box-shadow: 0 8px 26px #0008;
+}
+.panel p { color: var(--fg-2); }
+.panel .notice { color: var(--fg); overflow-wrap: anywhere; }
+.form { display: flex; gap: .5rem; }
+.form input { flex: 1; min-width: 0; }
+.controls {
+  max-height: 8rem;
+  overflow: auto;
+  list-style: none;
+  margin: .35rem 0 0;
+  padding: 0;
+}
+.controls li { padding: .15rem 0; overflow-wrap: anywhere; }
+.panel summary { cursor: pointer; }

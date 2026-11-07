@@ -38,6 +38,21 @@ See **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** for the full developer guid
 
 Employer · Candidate · Freelancer · Buyer · Admin
 
+## Voice control
+
+Open **Voice control** on any page and select **Start listening**. Say
+“read controls” to hear the available names and numbers, “set language to
+English” to fill a field, or “activate number 4” followed by “confirm” to
+use a button or link. The panel also accepts typed commands.
+
+The panel uses the browser's English speech recognition and can be used
+with a keyboard. Microphone access is opt-in. The browser may process
+audio through its speech service. The panel does not collect passwords
+or one-time codes, and it releases the microphone before a live interview.
+
+Use native controls with accessible labels so new screens work with the
+panel. Use `data-voice-ignore` on controls that should stay manual.
+
 ## Prior art
 
 Rewrite of `deeptech_backend` (Express) + `deeptech_frontend` (React SPA).  
