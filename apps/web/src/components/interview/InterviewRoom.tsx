@@ -16,6 +16,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button, Tag, Panel, Scene, Eyebrow } from '@/components/ui';
 import { usePreAssessment } from '@/hooks/usePreAssessment';
+import { interviewMicrophoneEvent } from '@/components/voice/useSpeechCommands';
 import type { Connection } from '@/lib/interviews';
 import styles from './InterviewRoom.module.css';
 
@@ -247,6 +248,7 @@ export function InterviewRoom({ interviewId, connection, refreshConnection, onFi
   }, [connection.faceCheckUrl, interviewId]);
 
   const connect = useCallback(async () => {
+    window.dispatchEvent(new Event(interviewMicrophoneEvent));
     setPhase('connecting');
     setNotice(null);
     let conn = connection;
@@ -396,7 +398,7 @@ export function InterviewRoom({ interviewId, connection, refreshConnection, onFi
   const earlier = lines.slice(0, -1);
 
   return (
-    <div className={styles.room}>
+    <div className={styles.room} data-voice-microphone={live ? 'in-use' : undefined}>
       <Panel className={styles.stage}>
         <div className={styles.status}>
           {pv.active ? (

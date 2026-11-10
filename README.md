@@ -38,6 +38,22 @@ See **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** for the full developer guid
 
 Employer · Candidate · Freelancer · Buyer · Admin
 
+## Voice control
+
+In the Next.js app, open **Voice control** and select **Start listening**.
+Try “take me to my applications”, “open interview studio”, or “change
+language to English”. Say “read controls” to hear available names and numbers.
+Use “activate number 4” followed by “confirm” to run an action. Turn on
+**Speak replies** to hear prompts. The panel also accepts typed commands.
+
+The panel uses the browser's English speech recognition and can be used
+with a keyboard. Microphone access is opt-in. The browser may process
+audio through its speech service. The panel does not collect passwords
+or one-time codes, and it releases the microphone before a live interview.
+
+Use native controls with accessible labels so new screens work with the
+panel. Use `data-voice-ignore` on controls that should stay manual.
+
 ## Prior art
 
 Rewrite of `deeptech_backend` (Express) + `deeptech_frontend` (React SPA).  

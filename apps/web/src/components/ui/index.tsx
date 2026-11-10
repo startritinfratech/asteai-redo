@@ -31,6 +31,7 @@ export function Button({
       type={type}
       disabled={disabled}
       onClick={onClick}
+      data-voice-ignore={type === 'button' && !onClick ? true : undefined}
       className={clsx(
         styles.btn,
         variants.includes('primary') && styles.pri,
@@ -101,10 +102,10 @@ export function Field({
   label, children,
 }: { label: string; children: React.ReactNode }) {
   return (
-    <div className={styles.field}>
-      <label>{label}</label>
+    <label className={styles.field}>
+      <span>{label}</span>
       {children}
-    </div>
+    </label>
   );
 }
 

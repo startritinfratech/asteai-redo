@@ -92,7 +92,7 @@
 .m i   { background: var(--mint); }
 
 .field { display: flex; flex-direction: column; gap: 4px; }
-.field label { font-size: .76rem; font-weight: 600; color: var(--fg-2); }
+.field > span { font-size: .76rem; font-weight: 600; color: var(--fg-2); }
 
 /* Form controls inside a Field — as the prototype (src/01_shell.html) */
 .field input, .field select, .field textarea {

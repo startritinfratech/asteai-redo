@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { Sora, Manrope, JetBrains_Mono } from 'next/font/google';
+import { VoiceControl } from '@/components/voice/VoiceControl';
 import '@/styles/globals.css';
 
 const sora = Sora({
@@ -28,7 +29,10 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={`${sora.variable} ${manrope.variable} ${mono.variable}`}>
-      <body>{children}</body>
+      <body>
+        {children}
+        <VoiceControl />
+      </body>
     </html>
   );
 }
