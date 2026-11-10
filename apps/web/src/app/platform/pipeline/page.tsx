@@ -4,14 +4,8 @@ import { useState } from 'react';
 import useSWR from 'swr';
 import type { ApplicationSummary, ApplicationStage } from '@asteai/types';
 import { api, errorMessage, fetcher } from '@/lib/api';
-import { Empty, PageHeader, Panel, Tag } from '@/components/ui';
-
-interface RequisitionOption {
-  id: string;
-  title: string;
-  industry: string;
-  headcount: number;
-}
+import { fetchAllRequisitions } from '@/lib/requisitions';
+import { Empty, Field, PageHeader, Panel, Tag } from '@/components/ui';
 
 const STAGES: ApplicationStage[] = [
   'Applied',
@@ -25,7 +19,8 @@ const STAGES: ApplicationStage[] = [
 ];
 
 export default function PipelinePage() {
-  const { data: reqs } = useSWR<RequisitionOption[]>('/requisitions', fetcher);
+  // All requisitions, not just the API's first page of 20.
+  const { data: reqs } = useSWR('/requisitions?all', fetchAllRequisitions);
   const [selectedReq, setSelectedReq] = useState<string>('');
 
   const activeReqId = selectedReq || (reqs && reqs.length > 0 ? reqs[0].id : '');
@@ -58,6 +53,7 @@ export default function PipelinePage() {
         actions={
           reqs && reqs.length > 0 ? (
             <select
+              aria-label="Requisition"
               value={activeReqId}
               onChange={(e) => setSelectedReq(e.target.value)}
               style={{ padding: '8px 12px', borderRadius: '6px', border: '1px solid var(--line)', background: 'var(--bg-1)', color: 'var(--fg-1)' }}
@@ -99,18 +95,18 @@ export default function PipelinePage() {
               <div>Scorecards: <b>{app.scorecards?.length || 0}</b></div>
             </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '6px' }}>
-              <label style={{ fontSize: '0.75rem', color: 'var(--fg-3)' }}>Advance Candidate Stage:</label>
-              <select
-                disabled={updatingId === app.id}
-                value={app.stage}
-                onChange={(e) => handleStageChange(app.id, e.target.value as ApplicationStage)}
-                style={{ padding: '6px', borderRadius: '4px', border: '1px solid var(--line)', background: 'var(--bg-1)', color: 'var(--fg-1)' }}
-              >
-                {STAGES.map((s) => (
-                  <option key={s} value={s}>{s}</option>
-                ))}
-              </select>
+            <div style={{ marginTop: '6px' }}>
+              <Field label="Advance Candidate Stage">
+                <select
+                  disabled={updatingId === app.id}
+                  value={app.stage}
+                  onChange={(e) => handleStageChange(app.id, e.target.value as ApplicationStage)}
+                >
+                  {STAGES.map((s) => (
+                    <option key={s} value={s}>{s}</option>
+                  ))}
+                </select>
+              </Field>
             </div>
           </Panel>
         ))}

@@ -3,97 +3,98 @@
 import { useState } from 'react';
 import useSWR from 'swr';
 import { fetcher } from '@/lib/api';
-import { Button, Empty, PageHeader, Panel, Tag } from '@/components/ui';
-
-interface InterviewTemplate {
-  id: string;
-  role: string;
-  industry: string;
-  rounds: { name: string; duration: string; focus: string }[];
-}
+import type { Catalogue } from '@/lib/interviews';
+import { Button, Empty, Field, PageHeader, Panel, Tag } from '@/components/ui';
 
 export default function InterviewsPage() {
-  const { data: catalogue, isLoading } = useSWR<InterviewTemplate[]>('/interviews/catalogue', fetcher);
+  const { data: catalogue, isLoading, error } = useSWR<Catalogue>('/interviews/catalogue', fetcher);
   const [offerCandidate, setOfferCandidate] = useState('');
   const [offerSalary, setOfferSalary] = useState('');
-  const [offerGenerated, setOfferGenerated] = useState(false);
+
+  const tech = catalogue?.domains?.tech ?? [];
+  const nonTech = catalogue?.domains?.['non-tech'] ?? [];
+  const frontline = catalogue?.frontline ?? [];
+  const languages = catalogue?.languages ?? [];
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
       <PageHeader
         eyebrow="Hire & ATS"
         title="Interviews & Offers"
-        sub="Standardized AI-assisted structured interview tracks, candidate rubrics, and automated offer letter generation."
+        sub="Structured AI interview tracks available on the platform, and a draft offer letter workspace."
       />
 
       <Panel style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-        <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 600 }}>Quick Offer Letter Generator</h3>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+          <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 600 }}>Offer Letter Draft</h3>
+          <Tag color="amber">Coming soon</Tag>
+        </div>
         <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--fg-2)' }}>
-          Create an offer letter packet and lock in candidate SLA terms.
+          Sending offer letters is not available yet. You can note the details here, but nothing is saved or sent to the candidate.
         </p>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '12px' }}>
-          <div>
-            <label style={{ fontSize: '0.75rem', color: 'var(--fg-3)', display: 'block', marginBottom: '4px' }}>Candidate Name / Email</label>
+          <Field label="Candidate Name / Email">
             <input
               type="text"
               placeholder="e.g. Rahul Gowda"
               value={offerCandidate}
               onChange={(e) => setOfferCandidate(e.target.value)}
-              style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid var(--line)', background: 'var(--bg-1)', color: 'var(--fg-1)' }}
             />
-          </div>
-          <div>
-            <label style={{ fontSize: '0.75rem', color: 'var(--fg-3)', display: 'block', marginBottom: '4px' }}>Annual CTC / Salary (INR)</label>
+          </Field>
+          <Field label="Annual CTC / Salary (INR)">
             <input
               type="text"
               placeholder="e.g. ₹6,50,000"
               value={offerSalary}
               onChange={(e) => setOfferSalary(e.target.value)}
-              style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid var(--line)', background: 'var(--bg-1)', color: 'var(--fg-1)' }}
             />
-          </div>
+          </Field>
         </div>
         <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
-          <Button
-            variant="mint"
-            disabled={!offerCandidate || !offerSalary}
-            onClick={() => setOfferGenerated(true)}
-          >
-            Generate & Send Offer Letter
+          <Button variant="mint" disabled>
+            Send Offer Letter (coming soon)
           </Button>
         </div>
-
-        {offerGenerated && (
-          <div style={{ padding: '12px', background: 'var(--bg-2)', border: '1px solid var(--line)', borderRadius: '6px', fontSize: '0.85rem', color: 'var(--fg-1)' }}>
-            🎉 <b>Offer Letter Dispatched:</b> Official employment agreement sent to <b>{offerCandidate}</b> with compensation <b>{offerSalary}</b>. Candidate has 48 hours to sign digitally.
-          </div>
-        )}
       </Panel>
 
       <h3 style={{ margin: '10px 0 0', fontSize: '1.1rem', fontWeight: 600 }}>Structured Interview Tracks</h3>
-      {isLoading && <Empty message="Loading interview templates…" />}
+      {isLoading && <Empty message="Loading interview tracks…" />}
+      {error && <Empty message="Could not load the interview catalogue." />}
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '14px' }}>
-        {catalogue?.map((item) => (
-          <Panel key={item.id} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ fontWeight: 600, fontSize: '0.95rem' }}>{item.role}</span>
-              <Tag color="mint">{item.industry}</Tag>
-            </div>
-            <div style={{ fontSize: '0.85rem', color: 'var(--fg-2)' }}>
-              <b>Rounds:</b>
-              <ul style={{ margin: '6px 0 0 16px', padding: 0 }}>
-                {item.rounds?.map((r, i) => (
-                  <li key={i} style={{ marginBottom: '4px' }}>
-                    {r.name} ({r.duration}) — <span style={{ color: 'var(--fg-3)' }}>{r.focus}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </Panel>
-        ))}
-      </div>
+      {catalogue && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '14px' }}>
+          <TrackPanel title="Technical" tag="Tech" items={tech} />
+          <TrackPanel title="Non-technical" tag="Non-tech" items={nonTech} />
+          {frontline.map((f) => (
+            <TrackPanel
+              key={f.field}
+              title={f.field}
+              tag={f.group || 'Frontline'}
+              items={f.roles.map((r) => r.label)}
+            />
+          ))}
+          {languages.length > 0 && (
+            <TrackPanel title="Interview languages" tag="Languages" items={languages.map((l) => l.label)} />
+          )}
+        </div>
+      )}
     </div>
   );
 }
 
+function TrackPanel({ title, tag, items }: { title: string; tag: string; items: string[] }) {
+  if (!items.length) return null;
+  return (
+    <Panel style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
+        <span style={{ fontWeight: 600, fontSize: '0.95rem' }}>{title}</span>
+        <Tag color="mint">{tag}</Tag>
+      </div>
+      <ul style={{ margin: '0 0 0 16px', padding: 0, fontSize: '0.85rem', color: 'var(--fg-2)' }}>
+        {items.map((item) => (
+          <li key={item} style={{ marginBottom: '4px' }}>{item}</li>
+        ))}
+      </ul>
+    </Panel>
+  );
+}

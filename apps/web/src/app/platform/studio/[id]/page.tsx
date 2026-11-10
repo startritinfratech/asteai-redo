@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import useSWR from 'swr';
 import { errorMessage } from '@/lib/api';
+import { useAuthStore } from '@/store/auth';
 import { Panel, Button, Tag, Eyebrow, Empty, KPI, Bar, PageHeader, Evidence } from '@/components/ui';
 import { InterviewRoom } from '@/components/interview/InterviewRoom';
 import {
@@ -18,16 +19,22 @@ const fieldLabel = (f: string) => f.replace(' (Frontline)', '');
 export default function InterviewPage() {
   const { id } = useParams<{ id: string }>();
   const [waiting, setWaiting] = useState(false);
+  // Admins reach this page from the AI Interviews list to review a candidate's
+  // interview. They must never open (or take over) the candidate's live session.
+  const readOnly = useAuthStore((s) => s.user?.role === 'Admin');
 
   const { data: interview, error, mutate } = useSWR(
     id ? `/interviews/mock/${id}` : null,
     () => interviewsApi.detail(id),
     // After the session ends the result can take a moment to land.
-    { refreshInterval: (d) => (waiting && d?.status === 'in_progress' ? 3000 : 0) },
+    {
+      refreshInterval: (d) =>
+        d?.status === 'in_progress' && (waiting || readOnly) ? (readOnly ? 15_000 : 3000) : 0,
+    },
   );
 
   const { data: connection, error: connError } = useSWR(
-    interview?.status === 'in_progress' && !waiting ? `/interviews/mock/${id}/session` : null,
+    !readOnly && interview?.status === 'in_progress' && !waiting ? `/interviews/mock/${id}/session` : null,
     () => interviewsApi.session(id),
     { revalidateOnFocus: false, revalidateIfStale: false },
   );
@@ -37,6 +44,24 @@ export default function InterviewPage() {
 
   if (error) return <Empty message={error.message ?? 'Interview not found'} />;
   if (!interview) return <Empty message="Loading…" />;
+
+  if (interview.status === 'in_progress' && readOnly) {
+    const tag = statusTag(interview.status);
+    return (
+      <div className={styles.page}>
+        <PageHeader
+          eyebrow={fieldLabel(interview.domain)}
+          title={interview.skill}
+          sub={`${new Date(interview.started_at).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })} · ${interview.turns} turns`}
+          actions={<Tag color={tag.color}>{tag.label}</Tag>}
+        />
+        <div className={styles.stage}>
+          <Empty message="The candidate is still taking this interview. The report appears here once it finishes." />
+          <Link href="/platform/ai-interviews" className={styles.small}>← Back to AI Interviews</Link>
+        </div>
+      </div>
+    );
+  }
 
   if (interview.status === 'in_progress') {
     return (
@@ -58,12 +83,12 @@ export default function InterviewPage() {
     );
   }
 
-  return <Report interview={interview} />;
+  return <Report interview={interview} readOnly={readOnly} />;
 }
 
 const strings = (v: unknown) => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : []);
 
-function Report({ interview: i }: { interview: MockInterviewDetail }) {
+function Report({ interview: i, readOnly }: { interview: MockInterviewDetail; readOnly: boolean }) {
   const ps = i.proctoring_summary ?? {};
   const tag = statusTag(i.status);
   const { data: partOne } = useSWR(`/interviews/mock/${i.id}/assessment`, () => interviewsApi.assessment(i.id), {
@@ -105,7 +130,13 @@ function Report({ interview: i }: { interview: MockInterviewDetail }) {
         {dlError && <div className={styles.error}>{dlError}</div>}
 
         {i.status === 'abandoned' && (
-          <Empty message="This interview did not finish, so there is no report. Start a new one from the Studio." />
+          <Empty
+            message={
+              readOnly
+                ? 'This interview did not finish, so there is no report.'
+                : 'This interview did not finish, so there is no report. Start a new one from the Studio.'
+            }
+          />
         )}
 
         {i.status === 'completed' && (
@@ -141,7 +172,7 @@ function Report({ interview: i }: { interview: MockInterviewDetail }) {
               <div className={styles.transcript}>
                 {(i.conversation ?? []).map((t, n) => (
                   <p key={n} className={styles.turn}>
-                    <span className={styles.turnWho}>{t.role === 'assistant' ? 'Interviewer' : 'You'}</span>
+                    <span className={styles.turnWho}>{t.role === 'assistant' ? 'Interviewer' : readOnly ? 'Candidate' : 'You'}</span>
                     {t.content?.map((c) => c.text).join(' ')}
                   </p>
                 ))}
@@ -151,7 +182,11 @@ function Report({ interview: i }: { interview: MockInterviewDetail }) {
           </>
         )}
 
-        <Link href="/platform/studio" className={styles.small}>← Back to the Studio</Link>
+        {readOnly ? (
+          <Link href="/platform/ai-interviews" className={styles.small}>← Back to AI Interviews</Link>
+        ) : (
+          <Link href="/platform/studio" className={styles.small}>← Back to the Studio</Link>
+        )}
       </div>
     </div>
   );

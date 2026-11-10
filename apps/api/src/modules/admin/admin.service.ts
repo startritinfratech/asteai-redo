@@ -58,7 +58,7 @@ export class AdminService {
     const [openDisputes, integrityFlags, unverifiedUsers] = await Promise.all([
       this.db.query(`SELECT COUNT(*) FROM disputes WHERE status = 'Open' OR status = 'In Review'`),
       this.db.query(`SELECT COUNT(*) FROM integrity_queue WHERE status = 'Open'`),
-      this.db.query(`SELECT COUNT(*) FROM user_accounts WHERE account_status = 'pending'`),
+      this.db.query(`SELECT COUNT(*) FROM user_accounts WHERE email_verified = FALSE AND account_status = 'active'`),
     ]);
     return {
       activeDisputes: parseInt(openDisputes.rows[0]?.count || '0', 10),

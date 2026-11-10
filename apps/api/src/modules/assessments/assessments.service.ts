@@ -1,5 +1,6 @@
 import {
-  ConflictException, ForbiddenException, HttpException, Inject, Injectable, Logger, NotFoundException,
+  BadGatewayException, ConflictException, ForbiddenException, HttpException, Inject, Injectable, Logger,
+  NotFoundException, ServiceUnavailableException,
 } from '@nestjs/common';
 import { createHash } from 'crypto';
 import { Pool, PoolClient } from 'pg';
@@ -49,6 +50,9 @@ const SESSION_ADMIN_SELECT = `
     JOIN user_accounts u ON u.id = s.candidate_id
     LEFT JOIN user_accounts a ON a.id = s.reset_by`;
 
+/** Application stages a finished assessment may move on to 'Assessment Review'. */
+const PRE_REVIEW_STAGES = `('Applied', 'Eligibility', 'Assessment Pending')`;
+
 /** deeptech_ai statuses the candidate should see as-is rather than as a 502. */
 const PASS_THROUGH = new Map<number, (msg: string) => HttpException>([
   [404, (m) => new NotFoundException(m)],
@@ -76,7 +80,7 @@ export class AssessmentsService {
   async start(user: User, requisitionId: string): Promise<AssessmentStep> {
     const { rows } = await this.db.query(
       `SELECT r.tier, r.industry, r.weight_iq, r.weight_eq, r.weight_grit, r.stack, r.language,
-              r.status AS req_status, a.result_id
+              r.status AS req_status, a.result_id, a.stage
          FROM applications a
          JOIN requisitions r ON r.id = a.requisition_id
         WHERE a.candidate_id = $1 AND a.requisition_id = $2`,
@@ -85,6 +89,7 @@ export class AssessmentsService {
     if (!rows.length) throw new NotFoundException('Apply to this requisition before taking its assessment');
     const req = rows[0];
     if (req.result_id) throw new ConflictException('You have already completed this assessment');
+    if (req.stage === 'Rejected') throw new ConflictException('This application is closed');
 
     const existing = await this.sessionFor(user.id, requisitionId);
     if (existing) return this.resume(user, existing);
@@ -178,10 +183,17 @@ export class AssessmentsService {
       );
       if (!rows.length) return this.existingResultId(client, r.session_id);
 
+      // Attach the result; only move the stage forward if the application is still before
+      // review (a candidate shortlisted or rejected meanwhile keeps that stage).
       await client.query(
-        `UPDATE applications SET result_id = $1, stage = 'Assessment Review', updated_at = NOW()
+        `UPDATE applications
+            SET result_id = $1,
+                stage = CASE WHEN stage IN ${PRE_REVIEW_STAGES} THEN 'Assessment Review'::application_stage_enum ELSE stage END,
+                history = CASE WHEN stage IN ${PRE_REVIEW_STAGES}
+                               THEN COALESCE(history, '[]'::jsonb) || $4::jsonb ELSE history END,
+                updated_at = NOW()
           WHERE candidate_id = $2 AND requisition_id = $3 AND result_id IS NULL`,
-        [id, candidateId, requisitionId],
+        [id, candidateId, requisitionId, JSON.stringify([{ t: Date.now(), stage: 'Assessment Review', by: 'system' }])],
       );
       await client.query(
         `UPDATE assessment_sessions SET status = 'completed', result_id = $1, completed_at = NOW() WHERE id = $2`,
@@ -198,13 +210,20 @@ export class AssessmentsService {
     });
   }
 
-  /** The candidate, an employer of a tenant they applied to, or an admin. */
+  /**
+   * The candidate, an employer of a tenant they applied to, or an admin. The candidate
+   * doesn't get the per-item evidence or raw theta estimates (they reveal the answer key).
+   */
   async findResult(id: string, user: User) {
     const { rows } = await this.db.query(`SELECT * FROM assessment_results WHERE id = $1`, [id]);
     if (!rows.length) throw new NotFoundException(`Result ${id} not found`);
     const result = rows[0];
 
-    if (user.role === 'Admin' || result.candidate_id === user.id) return result;
+    if (user.role === 'Admin') return result;
+    if (result.candidate_id === user.id) {
+      const { ev_data: _ev, theta_iq: _iq, theta_eq: _eq, theta_grit: _grit, ...own } = result;
+      return own;
+    }
     if (user.role === 'Employer' && user.tenantId) {
       const { rowCount } = await this.db.query(
         `SELECT 1 FROM applications WHERE result_id = $1 AND tenant_id = $2`,
@@ -215,22 +234,46 @@ export class AssessmentsService {
     throw new ForbiddenException();
   }
 
-  async getIntegrityQueue() {
+  /**
+   * Open integrity flags. Admins see every tenant; an employer only sees flags on results
+   * that belong to an application in their own tenant.
+   */
+  async getIntegrityQueue(user: Pick<User, 'role' | 'tenantId'>) {
+    if (user.role === 'Admin') {
+      const { rows } = await this.db.query(
+        `SELECT iq.*, ar.candidate_id, ar.fit_score, ar.integrity
+           FROM integrity_queue iq
+           JOIN assessment_results ar ON iq.result_id = ar.id
+          WHERE iq.status = 'Open'
+          ORDER BY iq.created_at ASC`,
+      );
+      return rows;
+    }
+    if (!user.tenantId) return [];
     const { rows } = await this.db.query(
       `SELECT iq.*, ar.candidate_id, ar.fit_score, ar.integrity
          FROM integrity_queue iq
          JOIN assessment_results ar ON iq.result_id = ar.id
         WHERE iq.status = 'Open'
+          AND EXISTS (SELECT 1 FROM applications a WHERE a.result_id = iq.result_id AND a.tenant_id = $1)
         ORDER BY iq.created_at ASC`,
+      [user.tenantId],
     );
     return rows;
   }
 
-  async resolveIntegrity(id: string, resolution: string, userId: string) {
+  /** Resolves a flag. A flag outside the employer's tenant is reported as missing (404). */
+  async resolveIntegrity(id: string, resolution: string, user: Pick<User, 'id' | 'role' | 'tenantId'>) {
+    const isAdmin = user.role === 'Admin';
+    if (!isAdmin && !user.tenantId) throw new NotFoundException();
     const { rows } = await this.db.query(
-      `UPDATE integrity_queue SET status = 'Resolved', resolution = $1, reviewed_by = $2, updated_at = NOW()
-        WHERE id = $3 RETURNING *`,
-      [resolution, userId, id],
+      `UPDATE integrity_queue iq
+          SET status = 'Resolved', resolution = $1, reviewed_by = $2, updated_at = NOW()
+        WHERE iq.id = $3
+          AND ($4::boolean OR EXISTS (
+                SELECT 1 FROM applications a WHERE a.result_id = iq.result_id AND a.tenant_id = $5))
+        RETURNING iq.*`,
+      [resolution, user.id, id, isAdmin, isAdmin ? null : user.tenantId],
     );
     if (!rows.length) throw new NotFoundException();
     return rows[0];
@@ -365,12 +408,18 @@ export class AssessmentsService {
     return rows[0].id;
   }
 
-  /** Runs a deeptech_ai call, turning its 404 / 409 / 422 into the same status here. */
+  /**
+   * Runs a deeptech_ai call, turning its 404 / 409 / 422 into the same status here.
+   * A 5xx or an unreachable service becomes a retryable 503; the session is left as is.
+   */
   private async callAi<T>(fn: () => Promise<T>): Promise<T> {
     try {
       return await fn();
     } catch (err) {
       const status = (err as { aiStatus?: number }).aiStatus;
+      if (err instanceof BadGatewayException && (status === undefined || status >= 500)) {
+        throw new ServiceUnavailableException('The assessment service is temporarily unavailable. Please try again.');
+      }
       const make = status ? PASS_THROUGH.get(status) : undefined;
       if (!make) throw err;
       let message = 'The assessment service rejected this request';

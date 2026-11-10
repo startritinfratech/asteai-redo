@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import useSWR from 'swr';
 import { fetcher } from '@/lib/api';
 import { Empty, PageHeader, Panel, Tag } from '@/components/ui';
@@ -13,6 +14,8 @@ interface ProposalRecord {
   note: string;
   status: string;
   created_at: string;
+  /** The contract the buyer created for this proposal, once awarded. */
+  contract_id: string | null;
 }
 
 export default function ProposalsPage() {
@@ -23,7 +26,7 @@ export default function ProposalsPage() {
       <PageHeader
         eyebrow="Marketplace"
         title="My Proposals"
-        sub="Track project submissions, buyer negotiations, awarded contracts, and milestones."
+        sub="Track your bids and open the contract for each awarded proposal."
       />
 
       {isLoading && <Empty message="Loading your submitted proposals…" />}
@@ -57,6 +60,19 @@ export default function ProposalsPage() {
               <div style={{ fontSize: '0.85rem', color: 'var(--fg-2)', fontStyle: 'italic' }}>
                 &ldquo;{p.note}&rdquo;
               </div>
+
+              {isAwarded && (p.contract_id ? (
+                <Link
+                  href={`/platform/contracts/${encodeURIComponent(p.contract_id)}`}
+                  style={{ fontSize: '0.85rem', color: 'var(--blue)' }}
+                >
+                  View contract →
+                </Link>
+              ) : (
+                <div style={{ fontSize: '0.8rem', color: 'var(--fg-3)' }}>
+                  Awarded. The buyer will send you a contract to review and sign.
+                </div>
+              ))}
             </Panel>
           );
         })}

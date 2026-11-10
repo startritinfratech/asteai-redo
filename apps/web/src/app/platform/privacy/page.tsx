@@ -3,15 +3,8 @@
 import { useState } from 'react';
 import useSWR from 'swr';
 import { api, errorMessage, fetcher } from '@/lib/api';
+import { latestConsentByPurpose, type ConsentRecord } from '@/lib/consents';
 import { Button, Empty, PageHeader, Panel, Tag } from '@/components/ui';
-
-interface ConsentRecord {
-  id: string;
-  purpose: string;
-  status: string;
-  created_at: string;
-  revoked_at?: string;
-}
 
 export default function PrivacyPage() {
   const { data: consents, isLoading, mutate } = useSWR<ConsentRecord[]>('/users/me/consents', fetcher);
@@ -51,6 +44,8 @@ export default function PrivacyPage() {
     }
   }
 
+  const latest = latestConsentByPurpose(consents);
+
   const defaultPurposes = [
     'AI Proctoring & Biometric Integrity',
     'Public Talent Passport Credential Verification',
@@ -76,7 +71,7 @@ export default function PrivacyPage() {
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
           {defaultPurposes.map((purpose) => {
-            const record = consents?.find((c) => c.purpose === purpose);
+            const record = latest.get(purpose);
             const isActive = record ? record.status === 'Active' : true;
 
             return (

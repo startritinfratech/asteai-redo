@@ -1,74 +1,60 @@
 'use client';
 
-import { useState } from 'react';
 import useSWR from 'swr';
 import { fetcher } from '@/lib/api';
-import { Button, Empty, PageHeader, Panel, Tag } from '@/components/ui';
+import { Empty, PageHeader } from '@/components/ui';
+import { ExpertCardView, ExpertFiltersForm, Pager } from '@/features/profiles/ExpertDirectory';
+import { filtersToQuery, parseFilters } from '@/features/profiles/format';
+import type { ExpertPage } from '@/features/profiles/types';
+import styles from '@/features/profiles/profiles.module.css';
 
-interface Expert {
-  id: string;
-  first_name: string;
-  last_name: string;
-  email: string;
-  title: string;
-  passport_id?: string;
-  tier?: string;
-  sten_iq?: number;
-  sten_eq?: number;
-  sten_grit?: number;
-  percentile?: number;
-}
+const BASE_PATH = '/platform/experts';
+const PAGE_SIZE = 12;
 
-export default function ExpertsPage() {
-  const { data: experts, error, isLoading } = useSWR<Expert[]>('/projects/experts', fetcher);
-  const [invitedId, setInvitedId] = useState<string | null>(null);
+/**
+ * In-app expert search: the public directory (GET /experts, approved profiles only, no
+ * emails) with the same filters, kept in the URL. Cards open the public profile.
+ */
+export default function ExpertsPage({ searchParams }: { searchParams: Record<string, string | string[] | undefined> }) {
+  const filters = parseFilters(searchParams);
+  const query = filtersToQuery(filters);
+  const key = `/experts${query ? `${query}&` : '?'}pageSize=${PAGE_SIZE}`;
+  const { data, error, isLoading } = useSWR<ExpertPage>(key, fetcher, { keepPreviousData: true });
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
       <PageHeader
         eyebrow="Talent Sourcing"
         title="Find Experts"
-        sub="Browse pre-assessed distributed systems engineers, AI specialists, and healthcare contractors with cryptographic Talent Passports."
+        sub="Search reviewed deep-tech experts by skill, domain, rate and availability. Look for the Talent Passport badge for verified assessment results."
       />
 
-      {isLoading && <Empty message="Loading verified experts…" />}
-      {error && <Empty message="Could not load experts catalogue." />}
-
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '14px' }}>
-        {experts?.map((e) => (
-          <Panel key={e.id} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div>
-                <span style={{ fontWeight: 600, fontSize: '1.05rem' }}>{e.first_name} {e.last_name}</span>
-                <div style={{ fontSize: '0.8rem', color: 'var(--fg-2)', marginTop: '2px' }}>{e.title}</div>
-              </div>
-              <Tag color="mint">{e.tier || 'Technical'}</Tag>
-            </div>
-
-            <div style={{ display: 'flex', gap: '10px', background: 'var(--bg-2)', padding: '8px 12px', borderRadius: '4px', fontSize: '0.8rem', color: 'var(--fg-2)' }}>
-              <div>IQ: <b>{e.sten_iq ?? '8.9'}</b></div>
-              <div>EQ: <b>{e.sten_eq ?? '7.4'}</b></div>
-              <div>Grit: <b>{e.sten_grit ?? '8.1'}</b></div>
-              <div>Top: <b>{100 - (e.percentile || 98)}%</b></div>
-            </div>
-
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '6px' }}>
-              <span style={{ fontSize: '0.75rem', color: 'var(--fg-3)', fontFamily: 'var(--font-mono)' }}>
-                {e.passport_id ? `Passport: ${e.passport_id}` : 'Verified Profile'}
-              </span>
-
-              {invitedId === e.id ? (
-                <span style={{ color: 'var(--mint)', fontSize: '0.85rem', fontWeight: 600 }}>✓ Invitation Sent</span>
-              ) : (
-                <Button variant="sm" onClick={() => setInvitedId(e.id)}>
-                  Invite to Project
-                </Button>
-              )}
-            </div>
-          </Panel>
-        ))}
+      <div className={styles.directory} style={{ paddingBlock: 0 }}>
+        <ExpertFiltersForm key={query} filters={filters} basePath={BASE_PATH} />
+        <section aria-labelledby="experts-results-h">
+          <div className={styles.resultsHead}>
+            <h2 id="experts-results-h" className={styles.muted} aria-live="polite">
+              {data ? `${data.total} expert${data.total === 1 ? '' : 's'}` : 'Experts'}
+            </h2>
+          </div>
+          {isLoading && !data && <Empty message="Loading experts…" />}
+          {error && <div className={styles.emptyBox} role="alert">Could not load the expert directory. Please try again shortly.</div>}
+          {data && data.items.length === 0 && (
+            <div className={styles.emptyBox}>No experts match these filters yet. Try a broader search.</div>
+          )}
+          {data && data.items.length > 0 && (
+            <>
+              <ul className={styles.cards}>
+                {data.items.map((e) => <li key={e.userId}><ExpertCardView expert={e} /></li>)}
+              </ul>
+              <Pager filters={filters} page={data.page} pageSize={data.pageSize} total={data.total} basePath={BASE_PATH} />
+            </>
+          )}
+          <p style={{ margin: '14px 0 0', fontSize: '0.8rem', color: 'var(--fg-3)' }}>
+            Inviting an expert to a project is coming soon. For now, publish a project and experts can bid on it.
+          </p>
+        </section>
       </div>
     </div>
   );
 }
-

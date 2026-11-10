@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import useSWR from 'swr';
 import type { Notification } from '@asteai/types';
 import { api, fetcher } from '@/lib/api';
+import { isInternalLink } from './links';
 import styles from './NotificationBell.module.css';
 
 const ago = new Intl.RelativeTimeFormat('en', { numeric: 'auto' });
@@ -18,7 +19,7 @@ function relative(t: number): string {
 }
 
 /** Only same-site paths are followed (the API stores '#' for anything else). */
-const isInternal = (link: string) => link.startsWith('/') && !link.startsWith('//');
+const isInternal = (link: string) => isInternalLink(link, window.location.origin);
 
 /** Bell with an unread count; opens a list of the user's latest notifications. */
 export function NotificationBell() {

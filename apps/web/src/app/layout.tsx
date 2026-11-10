@@ -21,7 +21,8 @@ const mono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'AsteAI Platform',
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000'),
+  title: { default: 'AsteAI Platform', template: '%s — AsteAI' },
   description: 'AI-powered hiring and talent marketplace',
 };
 

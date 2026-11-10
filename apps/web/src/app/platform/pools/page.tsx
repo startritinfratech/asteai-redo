@@ -4,7 +4,7 @@ import { useState } from 'react';
 import useSWR from 'swr';
 import { useAuthStore } from '@/store/auth';
 import { api, errorMessage, fetcher } from '@/lib/api';
-import { Button, Empty, PageHeader, Panel, Tag } from '@/components/ui';
+import { Button, Empty, Field, PageHeader, Panel, Tag } from '@/components/ui';
 
 interface TalentPool {
   id: string;
@@ -33,8 +33,8 @@ export default function PoolsPage() {
     try {
       const tags = tagsInput.split(',').map((t) => t.trim()).filter(Boolean);
       await api.post(`/tenants/${encodeURIComponent(tenantId)}/pools`, {
+        // A new pool starts empty; candidates are added to it later.
         name: name.trim(),
-        count: Math.floor(Math.random() * 20) + 5,
         tags,
       });
       setName('');
@@ -68,27 +68,24 @@ export default function PoolsPage() {
         <Panel style={{ display: 'flex', flexDirection: 'column', gap: '14px', border: '1px solid var(--blue)' }}>
           <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 600 }}>Create New Talent Pool</h3>
           <form onSubmit={handleCreatePool} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            <div>
-              <label style={{ fontSize: '0.75rem', color: 'var(--fg-3)', display: 'block', marginBottom: '4px' }}>Pool Name</label>
+            <Field label="Pool Name">
               <input
                 type="text"
                 required
+                maxLength={120}
                 placeholder="e.g. Senior Golang Microservices Engineers"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid var(--line)', background: 'var(--bg-1)', color: 'var(--fg-1)' }}
               />
-            </div>
-            <div>
-              <label style={{ fontSize: '0.75rem', color: 'var(--fg-3)', display: 'block', marginBottom: '4px' }}>Competency Tags (comma separated)</label>
+            </Field>
+            <Field label="Competency Tags (comma separated)">
               <input
                 type="text"
                 placeholder="e.g. Go, Kubernetes, gRPC, Distributed Systems"
                 value={tagsInput}
                 onChange={(e) => setTagsInput(e.target.value)}
-                style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid var(--line)', background: 'var(--bg-1)', color: 'var(--fg-1)' }}
               />
-            </div>
+            </Field>
             <div style={{ display: 'flex', gap: '10px' }}>
               <Button type="submit" variant="mint" disabled={busy}>Save Pool</Button>
               <Button type="button" onClick={() => setOpenModal(false)}>Cancel</Button>
@@ -106,7 +103,7 @@ export default function PoolsPage() {
           <Panel key={p.id} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span style={{ fontWeight: 600, fontSize: '1rem' }}>{p.name}</span>
-              <Tag color="mint">{p.count} Candidates</Tag>
+              <Tag color="mint">{p.count ?? 0} Candidates</Tag>
             </div>
             <div style={{ fontSize: '0.8rem', color: 'var(--fg-3)', fontFamily: 'var(--font-mono)' }}>
               ID: {p.id} · Active CRM Pool

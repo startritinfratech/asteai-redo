@@ -22,8 +22,10 @@
     "@nestjs/mapped-types": "^2.0.5",
     "@nestjs/passport": "^10.0.3",
     "@nestjs/platform-express": "^10.3.10",
+    "@nestjs/platform-socket.io": "^10.4.22",
     "@nestjs/swagger": "^7.4.0",
     "@nestjs/throttler": "^6.2.1",
+    "@nestjs/websockets": "^10.4.22",
     "@swc/core": "^1.16.21",
     "@swc/helpers": "^0.5.23",
     "bcryptjs": "^2.4.3",
@@ -41,6 +43,7 @@
     "pg": "^8.13.3",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
+    "socket.io": "^4.8.1",
     "ts-node": "^10.9.2",
     "tsx": "^4.23.15",
     "uuid": "^10.0.0"

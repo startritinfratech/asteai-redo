@@ -1,0 +1,267 @@
+.root {
+  display: grid;
+  grid-template-columns: minmax(260px, 320px) 1fr;
+  height: calc(100vh - var(--top-h) - 110px);
+  min-height: 440px;
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px; height: 1px;
+  padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0, 0, 0, 0);
+  white-space: nowrap; border: 0;
+}
+
+/* ── Chat list ─────────────────────────────────────────────────────────────── */
+
+.listPane {
+  display: flex; flex-direction: column;
+  min-height: 0;
+  border-right: 1px solid var(--line);
+}
+
+.paneHead {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  min-height: 56px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--line);
+}
+.paneHead h2 { font-size: 1rem; }
+
+.status {
+  font-family: var(--font-mono);
+  font-size: .64rem; letter-spacing: .08em; text-transform: uppercase;
+  color: var(--fg-3);
+}
+.status[data-status='connected'] { color: var(--mint); }
+.status[data-status='polling'] { color: var(--amber); }
+
+.list {
+  list-style: none; margin: 0; padding: 6px;
+  overflow-y: auto; flex: 1;
+}
+
+.chatItem {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 36px 1fr auto;
+  gap: 4px 10px;
+  align-items: center;
+  padding: 10px;
+  border: 0; border-radius: 10px;
+  background: none;
+  color: var(--fg-2);
+  text-align: left;
+}
+.chatItem:hover { background: var(--bg-3); }
+.chatItem[aria-current='true'] { background: var(--blue-soft); color: var(--fg); }
+.chatItem:focus-visible { outline: 2px solid var(--blue-2); outline-offset: -2px; }
+
+.avatar {
+  grid-row: span 2;
+  width: 36px; height: 36px;
+  display: grid; place-items: center;
+  border-radius: 50%;
+  background: var(--bg-4);
+  color: var(--blue-2);
+  font-family: var(--font-display);
+  font-size: .8rem; font-weight: 700;
+}
+
+.chatName {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-weight: 600; color: var(--fg);
+}
+.chatTime { font-size: .72rem; color: var(--fg-3); }
+.chatPreview {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: .8rem;
+}
+.chatItem[data-unread='true'] .chatPreview { color: var(--fg); }
+
+.badge {
+  justify-self: end;
+  min-width: 20px; height: 20px; padding: 0 6px;
+  border-radius: 10px;
+  background: var(--blue); color: #fff;
+  font-size: .7rem; font-weight: 700; line-height: 20px; text-align: center;
+}
+
+.project {
+  display: inline-block;
+  margin-left: 6px;
+  font-family: var(--font-mono); font-size: .62rem; letter-spacing: .06em; text-transform: uppercase;
+  color: var(--gold);
+}
+
+.note {
+  margin: 0;
+  padding: 24px 16px;
+  font-size: .86rem;
+  color: var(--fg-3);
+  text-align: center;
+}
+.error { color: var(--rose); }
+
+/* ── Thread ────────────────────────────────────────────────────────────────── */
+
+.threadPane {
+  display: flex; flex-direction: column;
+  min-width: 0; min-height: 0;
+  position: relative;
+}
+
+.back {
+  display: none;
+  border: 1px solid var(--line-2); border-radius: 999px;
+  background: var(--bg-3);
+  padding: 4px 10px;
+  font-size: .8rem;
+}
+
+.threadTitle { min-width: 0; flex: 1; }
+.threadTitle h2 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.threadSub { font-size: .76rem; color: var(--fg-3); }
+
+.scroller {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px 16px;
+  display: flex; flex-direction: column;
+}
+
+.older {
+  align-self: center;
+  margin-bottom: 8px;
+  border: 1px solid var(--line-2); border-radius: 999px;
+  background: var(--bg-3);
+  padding: 4px 12px;
+  font-size: .76rem; color: var(--fg-2);
+}
+.older:disabled { opacity: .5; cursor: default; }
+
+.messages {
+  list-style: none; margin: 0; padding: 0;
+  display: flex; flex-direction: column; gap: 6px;
+  margin-top: auto;
+}
+
+.message {
+  max-width: min(78%, 560px);
+  align-self: flex-start;
+  padding: 8px 12px;
+  border-radius: 14px 14px 14px 4px;
+  background: var(--bg-3);
+  border: 1px solid var(--line);
+}
+.message[data-mine='true'] {
+  align-self: flex-end;
+  border-radius: 14px 14px 4px 14px;
+  background: var(--blue-soft);
+  border-color: rgba(77, 139, 255, .3);
+}
+
+.body {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: .9rem;
+  color: var(--fg);
+}
+
+.meta {
+  display: block;
+  margin-top: 2px;
+  font-size: .68rem;
+  color: var(--fg-3);
+  text-align: right;
+}
+
+.typing {
+  min-height: 22px;
+  padding: 2px 16px;
+  font-size: .76rem; font-style: italic;
+  color: var(--fg-3);
+}
+
+.warning {
+  display: flex; gap: 10px; align-items: flex-start;
+  margin: 0 16px 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--amber); border-radius: 10px;
+  background: var(--amber-soft);
+  color: var(--fg);
+  font-size: .82rem;
+}
+.warning p { flex: 1; }
+.dismiss {
+  border: 0; background: none;
+  color: var(--fg-2);
+  font-size: .8rem; text-decoration: underline;
+}
+
+.composer {
+  display: flex; gap: 8px; align-items: flex-end;
+  padding: 10px 16px 14px;
+  border-top: 1px solid var(--line);
+}
+
+.input {
+  flex: 1;
+  min-height: 42px; max-height: 160px;
+  resize: none;
+  padding: 10px 12px;
+  border: 1px solid var(--line-2); border-radius: 12px;
+  background: var(--bg);
+  color: var(--fg);
+  line-height: 1.4;
+}
+.input:focus-visible { outline: 2px solid var(--blue); outline-offset: 0; border-color: transparent; }
+
+.send {
+  padding: 10px 16px;
+  border: 1px solid var(--blue); border-radius: 999px;
+  background: var(--blue); color: #fff;
+  font-weight: 600; font-size: .86rem;
+}
+.send:disabled { opacity: .45; cursor: not-allowed; }
+
+.composerError {
+  padding: 0 16px 8px;
+  font-size: .78rem;
+  color: var(--rose);
+}
+
+.counter {
+  padding: 0 16px 4px;
+  font-size: .7rem;
+  color: var(--fg-3);
+  text-align: right;
+}
+
+.emptyThread {
+  flex: 1;
+  display: grid; place-items: center;
+  padding: 24px;
+  text-align: center;
+  color: var(--fg-3);
+}
+
+/* ── Narrow screens: one pane at a time ───────────────────────────────────── */
+
+@media (max-width: 860px) {
+  .root {
+    grid-template-columns: 1fr;
+    height: calc(100dvh - var(--top-h) - 150px);
+    min-height: 380px;
+  }
+  .root[data-view='thread'] .listPane { display: none; }
+  .root[data-view='list'] .threadPane { display: none; }
+  .listPane { border-right: 0; }
+  .back { display: inline-flex; }
+  .message { max-width: 88%; }
+}

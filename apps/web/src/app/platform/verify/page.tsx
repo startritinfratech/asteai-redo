@@ -1,110 +1,139 @@
 'use client';
 
 import { useState } from 'react';
+import type { Passport } from '@asteai/types';
 import { api, errorMessage } from '@/lib/api';
-import { Button, CertCard, Empty, Hash, KPI, PageHeader, Panel, Tag } from '@/components/ui';
+import { Button, CertCard, Field, Hash, KPI, PageHeader, Panel, Tag } from '@/components/ui';
 
-interface VerifiedPassport {
-  id: string;
-  name: string;
-  tier: string;
-  sten_iq: number;
-  sten_eq: number;
-  sten_grit: number;
-  percentile: number;
-  status: string;
-  scores: [string, number][] | string;
-  hash?: string;
-  created_at?: string;
+/** GET /passports/verify?hash= → the passport only when it is valid. */
+type VerifyResponse =
+  | { valid: true; passport: Passport & { holderName?: string } }
+  | { valid: false; message: string };
+
+type Outcome =
+  | { kind: 'valid'; passport: Passport & { holderName?: string } }
+  | { kind: 'revoked' | 'expired' | 'notFound' | 'invalid'; message: string };
+
+function classify(res: VerifyResponse): Outcome {
+  if (res.valid) return { kind: 'valid', passport: res.passport };
+  const msg = res.message || 'Passport could not be verified';
+  const lower = msg.toLowerCase();
+  if (lower.includes('revoked')) return { kind: 'revoked', message: msg };
+  if (lower.includes('expired')) return { kind: 'expired', message: msg };
+  if (lower.includes('not found')) return { kind: 'notFound', message: msg };
+  return { kind: 'invalid', message: msg };
 }
 
+const OUTCOME_LABEL: Record<Exclude<Outcome['kind'], 'valid'>, string> = {
+  revoked: 'Revoked',
+  expired: 'Expired',
+  notFound: 'Not found',
+  invalid: 'Not valid',
+};
+
+const fmt = (n: number | null | undefined) => (typeof n === 'number' && Number.isFinite(n) ? String(n) : '—');
+
 export default function VerifyPage() {
-  const [query, setQuery] = useState('PASS-AARAV');
-  const [result, setResult] = useState<VerifiedPassport | null>(null);
+  const [query, setQuery] = useState('');
+  const [outcome, setOutcome] = useState<Outcome | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function handleVerify(e: React.FormEvent) {
     e.preventDefault();
-    if (!query.trim()) return;
+    const hash = query.trim();
+    if (!hash) return;
     setBusy(true);
     setError(null);
-    setResult(null);
+    setOutcome(null);
 
     try {
-      const data = await api.get<VerifiedPassport>(`/passports/${encodeURIComponent(query.trim())}`);
-      setResult(data);
+      const res = await api.get<VerifyResponse>('/passports/verify', { hash });
+      setOutcome(classify(res));
     } catch (err) {
-      setError(errorMessage(err, 'Passport credential could not be found or verified. Check ID.'));
+      setError(errorMessage(err, 'The passport could not be verified. Check the hash and try again.'));
     } finally {
       setBusy(false);
     }
   }
 
-  let parsedScores: [string, number][] = [];
-  if (result?.scores) {
-    if (typeof result.scores === 'string') {
-      try {
-        parsedScores = JSON.parse(result.scores);
-      } catch {}
-    } else if (Array.isArray(result.scores)) {
-      parsedScores = result.scores;
-    }
-  }
+  const passport = outcome?.kind === 'valid' ? outcome.passport : null;
+  const scores = Array.isArray(passport?.scores) ? passport.scores : [];
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
       <PageHeader
         eyebrow="Account & Trust"
         title="Verify a Talent Passport"
-        sub="Verify cryptographic integrity, proctoring authenticity, and anti-tampering hash of any AsteAI Talent Passport."
+        sub="Check a Talent Passport's verification hash against the AsteAI registry."
       />
 
       <Panel style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-        <form onSubmit={handleVerify} style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
-          <input
-            type="text"
-            required
-            placeholder="Enter Passport ID (e.g. PASS-AARAV)"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            style={{ flex: 1, minWidth: '240px', padding: '10px', borderRadius: '4px', border: '1px solid var(--line)', background: 'var(--bg-1)', color: 'var(--fg-1)' }}
-          />
-          <Button type="submit" variant="mint" disabled={busy}>
-            {busy ? 'Verifying Signature…' : 'Verify Credential'}
+        <form onSubmit={handleVerify} style={{ display: 'flex', gap: '10px', alignItems: 'flex-end', flexWrap: 'wrap' }}>
+          <div style={{ flex: 1, minWidth: '240px' }}>
+            <Field label="Passport verification hash">
+              <input
+                type="text"
+                required
+                placeholder="Paste the hash shown on the passport"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+              />
+            </Field>
+          </div>
+          <Button type="submit" variant="mint" disabled={busy || !query.trim()}>
+            {busy ? 'Verifying…' : 'Verify'}
           </Button>
         </form>
-        {error && <p style={{ color: 'var(--rose)', fontSize: '0.85rem', margin: 0 }}>{error}</p>}
+        {error && <p role="alert" style={{ color: 'var(--rose)', fontSize: '0.85rem', margin: 0 }}>{error}</p>}
       </Panel>
 
-      {result && (
+      {outcome && outcome.kind !== 'valid' && (
+        <Panel>
+          <div role="status" style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+            <Tag color={outcome.kind === 'expired' ? 'amber' : 'rose'}>{OUTCOME_LABEL[outcome.kind]}</Tag>
+            <span style={{ fontSize: '0.9rem', color: 'var(--fg-2)' }}>
+              {outcome.message}. This passport is not currently valid.
+            </span>
+          </div>
+        </Panel>
+      )}
+
+      {passport && (
         <CertCard>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
             <div>
-              <div style={{ fontSize: '0.75rem', color: 'var(--fg-3)', textTransform: 'uppercase' }}>Authentic AsteAI Talent Passport</div>
-              <h2 style={{ margin: '4px 0 0', fontSize: '1.4rem' }}>{result.name}</h2>
-              <div style={{ fontSize: '0.85rem', color: 'var(--fg-2)' }}>Track: <b>{result.tier}</b> · Status: <Tag color="mint">{result.status}</Tag></div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--fg-3)', textTransform: 'uppercase' }}>AsteAI Talent Passport</div>
+              <h2 style={{ margin: '4px 0 0', fontSize: '1.4rem' }}>{passport.holderName ?? passport.name}</h2>
+              <div style={{ fontSize: '0.85rem', color: 'var(--fg-2)' }}>
+                {passport.holderName && <>{passport.name} · </>}Tier: <b>{passport.tier}</b> · Status: <Tag color="mint">{passport.status}</Tag>
+              </div>
             </div>
             <div style={{ textAlign: 'right' }}>
-              <Tag color="mint">✓ Cryptographically Signed & Verified</Tag>
+              <Tag color="mint">✓ Verified</Tag>
               <div style={{ fontSize: '0.75rem', color: 'var(--fg-3)', marginTop: '4px' }}>
-                <Hash>{result.id}</Hash>
+                <Hash>{passport.hash}</Hash>
               </div>
+              {passport.validUntil > 0 && (
+                <div style={{ fontSize: '0.75rem', color: 'var(--fg-3)', marginTop: '4px' }}>
+                  Valid until {new Date(passport.validUntil).toLocaleDateString()}
+                </div>
+              )}
             </div>
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '12px', margin: '16px 0' }}>
-            <KPI value={result.sten_iq?.toString() ?? '8.9'} label="IQ Reasoning Sten" />
-            <KPI value={result.sten_eq?.toString() ?? '7.4'} label="EQ Collaborative Sten" />
-            <KPI value={result.sten_grit?.toString() ?? '8.1'} label="Persistence (Grit)" />
-            <KPI value={`${result.percentile ?? 98}th`} label="Global Percentile" />
+            <KPI value={fmt(passport.sten?.iq)} label="IQ Reasoning Sten" />
+            <KPI value={fmt(passport.sten?.eq)} label="EQ Collaborative Sten" />
+            <KPI value={fmt(passport.sten?.grit)} label="Persistence (Grit)" />
+            <KPI value={typeof passport.percentile === 'number' ? `${passport.percentile}th` : '—'} label="Percentile" />
           </div>
 
-          {parsedScores.length > 0 && (
+          {scores.length > 0 && (
             <div>
-              <h4 style={{ margin: '0 0 8px', fontSize: '0.9rem', color: 'var(--fg-2)' }}>Verified Skill Benchmark Rubrics</h4>
+              <h4 style={{ margin: '0 0 8px', fontSize: '0.9rem', color: 'var(--fg-2)' }}>Skill scores</h4>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                {parsedScores.map(([skill, score], i) => (
+                {scores.map(([skill, score], i) => (
                   <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 10px', background: 'var(--bg-2)', borderRadius: '4px', fontSize: '0.85rem' }}>
                     <span>{skill}</span>
                     <span style={{ fontWeight: 600, color: 'var(--mint)' }}>{score}%</span>
@@ -118,4 +147,3 @@ export default function VerifyPage() {
     </div>
   );
 }
-

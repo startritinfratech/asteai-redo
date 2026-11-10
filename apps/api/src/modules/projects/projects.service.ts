@@ -1,14 +1,28 @@
-import { ForbiddenException, Inject, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException, ConflictException, ForbiddenException, Inject, Injectable, NotFoundException,
+} from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { Pool } from 'pg';
-import type { Milestone, MilestoneStatus, ProjectStage, User } from '@asteai/types';
-import { DB_POOL, withTransaction } from '../../database/database.module';
+import type { Milestone, ProjectStage, User } from '@asteai/types';
+import { DB_POOL } from '../../database/database.module';
 import { generateId } from '../../common/utils/ids';
 import { Pagination } from '../../common/utils/pagination';
-import { CreateProjectDto } from './dto/project.dto';
+import { CreateDisputeDto, CreateProjectDto } from './dto/project.dto';
+import { canMoveProjectStage, ProjectParty } from './project-transitions';
 import { mapProjectRow, ProjectRow } from './project.mapper';
 
-const WITH_BUYER = `SELECT p.*, CONCAT_WS(' ', u.first_name, u.last_name) AS buyer_name
+function partyOf(project: Pick<ProjectRow, 'buyer_id' | 'awarded_to'>, user: User): ProjectParty {
+  return {
+    isAdmin: user.role === 'Admin',
+    isBuyer: project.buyer_id === user.id,
+    isFreelancer: project.awarded_to !== null && project.awarded_to === user.id,
+  };
+}
+
+/** The project's contract, if one was created for its awarded proposal (one per proposal). */
+const CONTRACT_ID = `(SELECT c.id FROM contracts c WHERE c.project_id = p.id ORDER BY c.created_at DESC LIMIT 1) AS contract_id`;
+
+const WITH_BUYER = `SELECT p.*, CONCAT_WS(' ', u.first_name, u.last_name) AS buyer_name, ${CONTRACT_ID}
   FROM projects p JOIN user_accounts u ON p.buyer_id = u.id`;
 
 @Injectable()
@@ -26,7 +40,7 @@ export class ProjectsService {
   async findForUser(userId: string, role: 'buyer' | 'freelancer') {
     const field = role === 'buyer' ? 'buyer_id' : 'awarded_to';
     const { rows } = await this.db.query<ProjectRow>(
-      `SELECT * FROM projects WHERE ${field} = $1 ORDER BY created_at DESC`,
+      `SELECT p.*, ${CONTRACT_ID} FROM projects p WHERE p.${field} = $1 ORDER BY p.created_at DESC`,
       [userId],
     );
     return rows.map(mapProjectRow);
@@ -38,8 +52,16 @@ export class ProjectsService {
     return rows[0];
   }
 
-  async findOne(id: string) {
-    return mapProjectRow(await this.load(id));
+  /**
+   * The buyer, the awarded freelancer and admins always see the project; anyone else
+   * only while it is open for bids and not under NDA.
+   */
+  async findOne(id: string, user: User) {
+    const project = await this.load(id);
+    const party = partyOf(project, user);
+    const isPublic = project.stage === 'Open for Bids' && !project.nda_required;
+    if (!party.isAdmin && !party.isBuyer && !party.isFreelancer && !isPublic) throw new ForbiddenException();
+    return mapProjectRow(project);
   }
 
   async create(dto: CreateProjectDto, user: User) {
@@ -63,38 +85,21 @@ export class ProjectsService {
     return mapProjectRow(rows[0]);
   }
 
+  /** See canMoveProjectStage: forward only, by the buyer; admins may set any stage. */
   async updateStage(id: string, stage: ProjectStage, user: User) {
     const project = await this.load(id);
-    if (project.buyer_id !== user.id && user.role !== 'Admin') throw new ForbiddenException();
+    const party = partyOf(project, user);
+    if (!party.isBuyer && !party.isAdmin) throw new ForbiddenException();
+    if (!canMoveProjectStage(party, project.stage, stage, project.awarded_to !== null)) {
+      throw new ConflictException(`Cannot move this project from '${project.stage}' to '${stage}'`);
+    }
+    // Conditional on the stage we checked, so a concurrent change can't be overwritten.
     const { rows } = await this.db.query<ProjectRow>(
-      `UPDATE projects SET stage = $1, updated_at = NOW() WHERE id = $2 RETURNING *`,
-      [stage, id],
+      `UPDATE projects SET stage = $1, updated_at = NOW() WHERE id = $2 AND stage = $3 RETURNING *`,
+      [stage, id, project.stage],
     );
+    if (!rows.length) throw new ConflictException('The project changed meanwhile; reload and try again');
     return mapProjectRow(rows[0]);
-  }
-
-  /** The project's buyer, the freelancer it was awarded to, or an admin. Row-locked read-modify-write. */
-  async updateMilestone(projectId: string, milestoneId: string, status: MilestoneStatus, user: User) {
-    return withTransaction(this.db, async (client) => {
-      const { rows } = await client.query<ProjectRow>(
-        `SELECT * FROM projects WHERE id = $1 FOR UPDATE`,
-        [projectId],
-      );
-      const project = rows[0];
-      if (!project) throw new NotFoundException(`Project ${projectId} not found`);
-      const isParty = project.buyer_id === user.id || project.awarded_to === user.id;
-      if (!isParty && user.role !== 'Admin') throw new ForbiddenException();
-
-      const milestones = project.milestones ?? [];
-      if (!milestones.some((m) => m.id === milestoneId)) throw new NotFoundException('Milestone not found');
-      const next = milestones.map((m) => (m.id === milestoneId ? { ...m, status } : m));
-
-      const { rows: updated } = await client.query<ProjectRow>(
-        `UPDATE projects SET milestones = $1::jsonb, updated_at = NOW() WHERE id = $2 RETURNING *`,
-        [JSON.stringify(next), projectId],
-      );
-      return mapProjectRow(updated[0]);
-    });
   }
 
   async findServices() {
@@ -104,17 +109,6 @@ export class ProjectsService {
       { id: 'SRV-3', title: 'LLM Prompt Engineering & Eval Harness', domain: 'AI / ML', price: 75000, days: 5, description: 'Automated test suite measuring hallucination, tone, latency, and token efficiency.', expertName: 'NovaStack AI Labs', rating: 4.8 },
       { id: 'SRV-4', title: 'HIPAA & Healthcare Data Pipeline Certification', domain: 'Healthcare', price: 110000, days: 14, description: 'End-to-end encryption verification, audit trails, and BAA compliance checklist.', expertName: 'Dr. Priya Menon', rating: 4.9 },
     ];
-  }
-
-  async findExperts() {
-    const { rows } = await this.db.query(
-      `SELECT u.id, u.first_name, u.last_name, u.email, u.title,
-              p.id AS passport_id, p.tier, p.scores, p.sten_iq, p.sten_eq, p.sten_grit, p.percentile
-       FROM user_accounts u
-       LEFT JOIN passports p ON p.user_id = u.id
-       WHERE u.role = 'Freelancer' AND u.account_status = 'active'`,
-    );
-    return rows;
   }
 
   async findDisputes(user: User) {
@@ -146,13 +140,27 @@ export class ProjectsService {
     return rows;
   }
 
-  async createDispute(data: { projectId?: string; raisedAgainst: string; reason: string }, user: User) {
-    const id = `DISP-${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
+  /** Only between the two parties of a contracted project: its buyer and awarded freelancer. */
+  async createDispute(data: CreateDisputeDto, user: User) {
+    const { rows: projectRows } = await this.db.query<Pick<ProjectRow, 'buyer_id' | 'awarded_to'>>(
+      `SELECT buyer_id, awarded_to FROM projects WHERE id = $1`,
+      [data.projectId],
+    );
+    if (!projectRows.length) throw new NotFoundException('Project not found');
+    const { buyer_id: buyerId, awarded_to: freelancerId } = projectRows[0];
+    if (!freelancerId) throw new BadRequestException('A dispute needs an awarded project');
+    const parties = [buyerId, freelancerId];
+    if (!parties.includes(user.id)) throw new ForbiddenException();
+    if (data.raisedAgainst === user.id || !parties.includes(data.raisedAgainst)) {
+      throw new BadRequestException('A dispute must be raised against the other party of the project');
+    }
+
+    const id = generateId('DISP');
     const timeline = JSON.stringify([{ date: new Date().toISOString().slice(0, 10), note: `Dispute opened by ${user.firstName}: ${data.reason}` }]);
     const { rows } = await this.db.query(
       `INSERT INTO disputes (id, project_id, raised_by, raised_against, reason, status, timeline)
        VALUES ($1, $2, $3, $4, $5, 'Open', $6::jsonb) RETURNING *`,
-      [id, data.projectId ?? null, user.id, data.raisedAgainst, data.reason, timeline],
+      [id, data.projectId, user.id, data.raisedAgainst, data.reason, timeline],
     );
     return rows[0];
   }

@@ -1,9 +1,12 @@
-import { BadRequestException, ForbiddenException, Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { Pool } from 'pg';
 import type { User } from '@asteai/types';
 import { DB_POOL, withTransaction } from '../../database/database.module';
 import { generateId } from '../../common/utils/ids';
 import { SubmitProposalDto } from './dto/submit-proposal.dto';
+
+/** A bid can only be awarded while the project is still collecting or shortlisting bids. */
+export const AWARDABLE_STAGES: readonly string[] = ['Open for Bids', 'Shortlisting'];
 
 @Injectable()
 export class ProposalsService {
@@ -19,8 +22,9 @@ export class ProposalsService {
     if (projectRows[0].buyer_id !== user.id && user.role !== 'Admin') throw new ForbiddenException();
 
     const { rows } = await this.db.query(
-      `SELECT p.*, CONCAT_WS(' ', u.first_name, u.last_name) AS expert_name
+      `SELECT p.*, CONCAT_WS(' ', u.first_name, u.last_name) AS expert_name, c.id AS contract_id
          FROM proposals p JOIN user_accounts u ON p.expert_id = u.id
+         LEFT JOIN contracts c ON c.proposal_id = p.id
         WHERE p.project_id = $1 ORDER BY p.created_at ASC`,
       [projectId],
     );
@@ -29,8 +33,9 @@ export class ProposalsService {
 
   async findMine(userId: string) {
     const { rows } = await this.db.query(
-      `SELECT p.*, pr.title AS project_title, pr.stage AS project_stage
+      `SELECT p.*, pr.title AS project_title, pr.stage AS project_stage, c.id AS contract_id
          FROM proposals p JOIN projects pr ON p.project_id = pr.id
+         LEFT JOIN contracts c ON c.proposal_id = p.id
         WHERE p.expert_id = $1 ORDER BY p.created_at DESC`,
       [userId],
     );
@@ -74,7 +79,9 @@ export class ProposalsService {
       );
       if (!prRows.length) throw new NotFoundException('Project not found');
       if (prRows[0].buyer_id !== user.id) throw new ForbiddenException();
-      if (prRows[0].stage === 'Contracted') throw new BadRequestException('This project has already been awarded');
+      if (!AWARDABLE_STAGES.includes(prRows[0].stage)) {
+        throw new ConflictException(`A project in stage '${prRows[0].stage}' can no longer be awarded`);
+      }
 
       await client.query(
         `UPDATE proposals

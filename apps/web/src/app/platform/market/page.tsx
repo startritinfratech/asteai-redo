@@ -64,8 +64,9 @@ export default function MarketPage() {
           <form onSubmit={handleProposal} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
               <div>
-                <label style={{ fontSize: '0.75rem', color: 'var(--fg-3)', display: 'block', marginBottom: '4px' }}>Bid Price (INR)</label>
+                <label htmlFor="market-bid-price-inr" style={{ fontSize: '0.75rem', color: 'var(--fg-3)', display: 'block', marginBottom: '4px' }}>Bid Price (INR)</label>
                 <input
+                  id="market-bid-price-inr"
                   type="number"
                   required
                   min={1000}
@@ -75,8 +76,9 @@ export default function MarketPage() {
                 />
               </div>
               <div>
-                <label style={{ fontSize: '0.75rem', color: 'var(--fg-3)', display: 'block', marginBottom: '4px' }}>Estimated Delivery (Days)</label>
+                <label htmlFor="market-estimated-delivery-days" style={{ fontSize: '0.75rem', color: 'var(--fg-3)', display: 'block', marginBottom: '4px' }}>Estimated Delivery (Days)</label>
                 <input
+                  id="market-estimated-delivery-days"
                   type="number"
                   required
                   min={1}
@@ -88,8 +90,9 @@ export default function MarketPage() {
             </div>
 
             <div>
-              <label style={{ fontSize: '0.75rem', color: 'var(--fg-3)', display: 'block', marginBottom: '4px' }}>Proposal Pitch / Approach</label>
+              <label htmlFor="market-proposal-pitch-approach" style={{ fontSize: '0.75rem', color: 'var(--fg-3)', display: 'block', marginBottom: '4px' }}>Proposal Pitch / Approach</label>
               <textarea
+                id="market-proposal-pitch-approach"
                 required
                 rows={3}
                 placeholder="Explain your approach, architectural patterns, and previous experience with this stack..."

@@ -7,15 +7,12 @@
 import { useEffect, useState } from 'react';
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { User, UserRole } from '@asteai/types';
-import { api, setSessionExpiredHandler } from '@/lib/api';
+import type {
+  AuthTokensResponse, LoginResponse, TwoFactorChallengeResponse, User, UserRole,
+} from '@asteai/types';
+import { mutate } from 'swr';
+import { api, apiRequest, setSessionExpiredHandler } from '@/lib/api';
 import { tokenStorage } from '@/lib/tokens';
-
-interface LoginResponse {
-  accessToken: string;
-  refreshToken: string;
-  user: User;
-}
 
 export interface RegisterPayload {
   email: string;
@@ -29,16 +26,28 @@ interface AuthState {
   user: User | null;
   isLoading: boolean;
 
-  login: (email: string, password: string) => Promise<User>;
+  /**
+   * Signs in with email and password. Returns the user, or the 2FA challenge when the
+   * account has two-factor authentication on (then nothing is stored yet: finish with
+   * POST /auth/login/2fa and `setSession`).
+   */
+  login: (email: string, password: string) => Promise<User | TwoFactorChallengeResponse>;
+  /** Stores the tokens and user from any sign-in (login, register, 2FA, password change). */
+  setSession: (res: AuthTokensResponse) => User;
   register: (payload: RegisterPayload) => Promise<User>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
   clearSession: () => void;
 }
 
+/** Drops every cached SWR response so the next user never sees the previous user's data. */
+function clearSwrCache() {
+  void mutate(() => true, undefined, { revalidate: false });
+}
+
 export const useAuthStore = create<AuthState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       user: null,
       isLoading: false,
 
@@ -46,34 +55,49 @@ export const useAuthStore = create<AuthState>()(
         set({ isLoading: true });
         try {
           const res = await api.post<LoginResponse>('/auth/login', { email, password });
-          tokenStorage.set({ accessToken: res.accessToken, refreshToken: res.refreshToken, userId: res.user.id });
-          set({ user: res.user });
-          return res.user;
+          // Password accepted but a second factor is due: nothing is stored yet.
+          if ('twoFactorRequired' in res) return res;
+          return get().setSession(res);
         } finally {
           set({ isLoading: false });
         }
       },
 
+      setSession(res) {
+        tokenStorage.set({ accessToken: res.accessToken, refreshToken: res.refreshToken, userId: res.user.id });
+        set({ user: res.user });
+        return res.user;
+      },
+
       async register(payload) {
         set({ isLoading: true });
         try {
-          const res = await api.post<LoginResponse>('/auth/register', payload);
-          tokenStorage.set({ accessToken: res.accessToken, refreshToken: res.refreshToken, userId: res.user.id });
-          set({ user: res.user });
-          return res.user;
+          return get().setSession(await api.post<AuthTokensResponse>('/auth/register', payload));
         } finally {
           set({ isLoading: false });
         }
       },
 
       async logout() {
-        try {
-          await api.post('/auth/logout');
-        } catch {
-          // The server session may already be gone; sign out locally regardless.
-        }
+        // Snapshot the tokens, then sign out locally first so nothing (an expired
+        // access token, a slow network) can leave the user half signed in.
+        const { accessToken, refreshToken, userId } = tokenStorage.get();
         tokenStorage.clear();
         set({ user: null });
+        clearSwrCache();
+
+        // The API revokes refresh tokens with either the bearer token or, after the
+        // access token has expired, the {userId, refreshToken} pair in the body.
+        if (!userId && !accessToken) return;
+        try {
+          await apiRequest('/auth/logout', {
+            method: 'POST',
+            body: userId && refreshToken ? { userId, refreshToken } : {},
+            headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
+          });
+        } catch {
+          // The server session may already be gone; the local sign-out above stands.
+        }
       },
 
       async refreshUser() {
@@ -87,6 +111,7 @@ export const useAuthStore = create<AuthState>()(
       clearSession() {
         tokenStorage.clear();
         set({ user: null });
+        clearSwrCache();
       },
     }),
     {

@@ -169,4 +169,81 @@ describe('AssessmentsService', () => {
       assert.deepEqual([out.status, out.resetByName, out.resetReason], ['reset', 'Ops Lead', 'Power cut mid-test']);
     });
   });
+
+  it('refuses to start an assessment for a rejected application', async () => {
+    const { pool } = fakePool([{ rows: [{ result_id: null, req_status: 'Open', stage: 'Rejected' }] }]);
+    const svc = new AssessmentsService(pool, {} as AiService, {} as NotificationsService, {} as EmailService);
+    await assert.rejects(svc.start(candidate, 'REQ-1'), (e: HttpException) => e.getStatus() === 409);
+  });
+
+  it('answers a retryable 503 and keeps the session when deeptech_ai fails', async () => {
+    for (const err of [aiError(500, 'boom'), new BadGatewayException('The AI interview service is unreachable')]) {
+      const { pool, sql } = fakePool([{ rows: [{ id: 'S1', status: 'active', requisition_id: 'REQ-1' }] }]);
+      const ai = { post: async () => { throw err; } } as unknown as AiService;
+      await assert.rejects(
+        new AssessmentsService(pool, ai, {} as NotificationsService, {} as EmailService).answer(candidate, 'S1', { itemId: '3', response: {} }),
+        (e: HttpException) => e.getStatus() === 503,
+      );
+      assert.ok(!sql.some((q) => /expired/.test(q)), 'the session is not expired');
+    }
+  });
+
+  it('only moves an application to review from a pre-review stage, with a history entry', async () => {
+    const { pool, sql, params } = fakePool([{ rows: [{ id: 'R-1' }] }, { rows: [] }, { rows: [] }]);
+    await new AssessmentsService(pool, {} as AiService, {} as NotificationsService, {} as EmailService)
+      .storeResult('cand-1', 'REQ-1', scored());
+    const update = sql.findIndex((q) => /UPDATE applications/.test(q));
+    assert.match(sql[update], /WHEN stage IN \('Applied', 'Eligibility', 'Assessment Pending'\) THEN 'Assessment Review'/);
+    assert.match(sql[update], /ELSE stage END/);
+    assert.equal(JSON.parse(params[update][3] as string)[0].stage, 'Assessment Review');
+  });
+
+  it("hides per-item evidence and theta from the candidate's own result", async () => {
+    const row = { id: 'R-1', candidate_id: 'cand-1', sten_iq: 6, ev_data: [{ correct: true }], theta_iq: 0.4, theta_eq: 0, theta_grit: 0 };
+    const own = await new AssessmentsService(fakePool([{ rows: [{ ...row }] }]).pool, {} as AiService, {} as NotificationsService, {} as EmailService)
+      .findResult('R-1', candidate);
+    assert.deepEqual(own, { id: 'R-1', candidate_id: 'cand-1', sten_iq: 6 });
+    const full = await new AssessmentsService(fakePool([{ rows: [{ ...row }] }]).pool, {} as AiService, {} as NotificationsService, {} as EmailService)
+      .findResult('R-1', admin);
+    assert.deepEqual(full, row);
+  });
+
+  describe('integrity queue', () => {
+    const employer = { id: 'emp-1', role: 'Employer', tenantId: 'T1' } as User;
+    const svcFor = (pool: Pool) => new AssessmentsService(pool, {} as AiService, {} as NotificationsService, {} as EmailService);
+
+    it("filters an employer's queue to their own tenant's applications", async () => {
+      const { pool, sql, params } = fakePool([{ rows: [{ id: 'IQ-1' }] }]);
+      await svcFor(pool).getIntegrityQueue(employer);
+      assert.match(sql[0], /applications a WHERE a\.result_id = iq\.result_id AND a\.tenant_id = \$1/);
+      assert.deepEqual(params[0], ['T1']);
+    });
+
+    it('shows admins every tenant', async () => {
+      const { pool, sql, params } = fakePool([{ rows: [] }]);
+      await svcFor(pool).getIntegrityQueue(admin);
+      assert.doesNotMatch(sql[0], /tenant_id/);
+      assert.deepEqual(params[0], []);
+    });
+
+    it('gives an employer without a tenant an empty queue without querying', async () => {
+      const { pool, sql } = fakePool([]);
+      assert.deepEqual(await svcFor(pool).getIntegrityQueue({ role: 'Employer', tenantId: null }), []);
+      assert.equal(sql.length, 0);
+    });
+
+    it("answers 404 when an employer resolves another tenant's flag", async () => {
+      const { pool, sql, params } = fakePool([{ rows: [] }]);
+      await assert.rejects(svcFor(pool).resolveIntegrity('IQ-9', 'ok', employer), (e: HttpException) => e.getStatus() === 404);
+      assert.match(sql[0], /a\.tenant_id = \$5/);
+      assert.deepEqual(params[0], ['ok', 'emp-1', 'IQ-9', false, 'T1']);
+    });
+
+    it('lets an admin resolve any flag', async () => {
+      const { pool, params } = fakePool([{ rows: [{ id: 'IQ-9', status: 'Resolved' }] }]);
+      const out = await svcFor(pool).resolveIntegrity('IQ-9', 'ok', admin);
+      assert.equal(out.status, 'Resolved');
+      assert.deepEqual(params[0], ['ok', 'adm-1', 'IQ-9', true, null]);
+    });
+  });
 });

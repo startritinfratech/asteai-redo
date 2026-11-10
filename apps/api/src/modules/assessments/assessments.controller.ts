@@ -61,13 +61,13 @@ export class AssessmentsController {
 
   @Get('integrity-queue')
   @Roles('Admin', 'Employer')
-  integrityQueue() {
-    return this.svc.getIntegrityQueue();
+  integrityQueue(@CurrentUser() user: User) {
+    return this.svc.getIntegrityQueue(user);
   }
 
   @Patch('integrity-queue/:id/resolve')
   @Roles('Admin', 'Employer')
   resolve(@Param('id') id: string, @Body() body: ResolveIntegrityDto, @CurrentUser() user: User) {
-    return this.svc.resolveIntegrity(id, body.resolution, user.id);
+    return this.svc.resolveIntegrity(id, body.resolution, user);
   }
 }

@@ -83,8 +83,9 @@ export default function OutreachPage() {
           <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 600 }}>Launch Outreach Campaign</h3>
           <form onSubmit={handleLaunch} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
             <div>
-              <label style={{ fontSize: '0.75rem', color: 'var(--fg-3)', display: 'block', marginBottom: '4px' }}>Campaign Name</label>
+              <label htmlFor="outreach-campaign-name" style={{ fontSize: '0.75rem', color: 'var(--fg-3)', display: 'block', marginBottom: '4px' }}>Campaign Name</label>
               <input
+                id="outreach-campaign-name"
                 type="text"
                 required
                 placeholder="e.g. Bengaluru Distributed Systems Sourcing Sprint"
@@ -95,8 +96,9 @@ export default function OutreachPage() {
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
               <div>
-                <label style={{ fontSize: '0.75rem', color: 'var(--fg-3)', display: 'block', marginBottom: '4px' }}>Delivery Channel</label>
+                <label htmlFor="outreach-delivery-channel" style={{ fontSize: '0.75rem', color: 'var(--fg-3)', display: 'block', marginBottom: '4px' }}>Delivery Channel</label>
                 <select
+                  id="outreach-delivery-channel"
                   value={channel}
                   onChange={(e) => setChannel(e.target.value)}
                   style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid var(--line)', background: 'var(--bg-1)', color: 'var(--fg-1)' }}
@@ -108,8 +110,9 @@ export default function OutreachPage() {
                 </select>
               </div>
               <div>
-                <label style={{ fontSize: '0.75rem', color: 'var(--fg-3)', display: 'block', marginBottom: '4px' }}>Target Audience Count</label>
+                <label htmlFor="outreach-target-audience-count" style={{ fontSize: '0.75rem', color: 'var(--fg-3)', display: 'block', marginBottom: '4px' }}>Target Audience Count</label>
                 <input
+                  id="outreach-target-audience-count"
                   type="number"
                   min={10}
                   max={5000}

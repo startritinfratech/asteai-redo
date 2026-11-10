@@ -80,9 +80,13 @@ export class InterviewsService {
     return { interview: rows[0], connection: this.connection(rows[0], summary, session) };
   }
 
-  /** A fresh AI token for an interview the user owns and has not finished (reconnects). */
+  /**
+   * A fresh AI token for an interview the user owns and has not finished (reconnects).
+   * Owner only: an admin may read results but must not join a candidate's live interview.
+   */
   async session(user: Actor, id: string) {
     const row = await this.owned(user, id);
+    if (row.user_id !== user.id) throw new ForbiddenException();
     if (row.status !== 'in_progress') throw new BadRequestException('This interview has finished');
     return this.connection(row, row.summary ?? '', this.ai.session(user));
   }

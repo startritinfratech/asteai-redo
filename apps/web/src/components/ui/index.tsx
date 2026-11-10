@@ -102,14 +102,31 @@ export function Bar({ value, max = 10, variant }: { value: number; max?: number;
 }
 
 // ── Field ─────────────────────────────────────────────────────────────────────
+/**
+ * A labelled form control. When `children` is a single element the label is tied
+ * to it with `htmlFor` (reusing the control's own `id` if it has one); otherwise the
+ * label wraps the children so the association is implicit.
+ */
 export function Field({
   label, children,
 }: { label: string; children: React.ReactNode }) {
+  const generatedId = React.useId();
+  const only = React.Children.count(children) === 1 && React.isValidElement(children) ? children : null;
+  if (only) {
+    const props = only.props as { id?: string };
+    const id = props.id ?? generatedId;
+    return (
+      <div className={styles.field}>
+        <label htmlFor={id}>{label}</label>
+        {props.id ? only : React.cloneElement(only as React.ReactElement<{ id?: string }>, { id })}
+      </div>
+    );
+  }
   return (
-    <div className={styles.field}>
-      <label>{label}</label>
+    <label className={styles.field}>
+      <span>{label}</span>
       {children}
-    </div>
+    </label>
   );
 }
 

@@ -1,4 +1,4 @@
-import { Controller, Get, Patch, Param, UseGuards } from '@nestjs/common';
+import { Controller, Get, Patch, Param, ParseUUIDPipe, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { NotificationsService } from './notifications.service';
@@ -16,7 +16,7 @@ export class NotificationsController {
   findAll(@CurrentUser() user: User) { return this.svc.findForUser(user.id); }
 
   @Patch(':id/read')
-  markRead(@Param('id') id: string, @CurrentUser() user: User) {
+  markRead(@Param('id', new ParseUUIDPipe()) id: string, @CurrentUser() user: User) {
     return this.svc.markRead(id, user.id);
   }
 

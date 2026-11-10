@@ -18,6 +18,14 @@ class EnvironmentVariables {
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(65535)
   PORT?: number;
 
+  /**
+   * How many reverse proxies (load balancer, CDN) sit in front of the API. Express then
+   * takes the client IP (req.ip, e.g. contract signature IPs) from X-Forwarded-For that
+   * many hops back. Unset or 0: trust no proxy and use the socket address.
+   */
+  @IsOptional() @Type(() => Number) @IsInt() @Min(0) @Max(10)
+  TRUST_PROXY?: number;
+
   // ── Database ──
   @IsString() DATABASE_HOST: string;
   @IsString() DATABASE_NAME: string;
@@ -57,6 +65,15 @@ class EnvironmentVariables {
   @IsOptional() @IsString() JWT_EXPIRES_IN?: string;
   @IsOptional() @IsString() JWT_REFRESH_EXPIRES_IN?: string;
 
+  /**
+   * AES-256-GCM key material for stored TOTP secrets. Required in production; in
+   * development the key is derived from JWT_SECRET when it is unset.
+   */
+  @ValidateIf((env: EnvironmentVariables) => env.NODE_ENV === 'production' || env.TOTP_ENCRYPTION_KEY !== undefined)
+  @IsString({ message: 'TOTP_ENCRYPTION_KEY is required in production' })
+  @MinLength(32, { message: 'TOTP_ENCRYPTION_KEY must be at least 32 characters' })
+  TOTP_ENCRYPTION_KEY?: string;
+
   // ── AI service ──
   @IsOptional() @IsUrl({ require_tld: false }) AI_SERVICE_URL?: string;
   @IsOptional() @IsUrl({ require_tld: false }) AI_SERVICE_PUBLIC_URL?: string;
@@ -78,6 +95,9 @@ export function validateEnv(config: Record<string, unknown>): Record<string, unk
 
   if (env.AI_JWT_SECRET && env.AI_JWT_SECRET === env.JWT_SECRET) {
     problems.push('AI_JWT_SECRET must differ from JWT_SECRET (the AI service must not be able to mint logins)');
+  }
+  if (env.TOTP_ENCRYPTION_KEY && env.TOTP_ENCRYPTION_KEY === env.JWT_SECRET) {
+    problems.push('TOTP_ENCRYPTION_KEY must differ from JWT_SECRET');
   }
   if (env.NODE_ENV === 'production' && /^replace_with/.test(env.JWT_SECRET ?? '')) {
     problems.push('JWT_SECRET still has the .env.example placeholder');

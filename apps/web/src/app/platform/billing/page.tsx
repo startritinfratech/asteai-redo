@@ -4,30 +4,17 @@ import { useState } from 'react';
 import useSWR from 'swr';
 import { useAuthStore } from '@/store/auth';
 import { api, errorMessage, fetcher } from '@/lib/api';
-import { Button, Empty, KPI, PageHeader, Panel, Tag } from '@/components/ui';
+import type { LedgerEntry, Tenant } from '@asteai/types';
+import { Button, Chips, Empty, KPI, PageHeader, Panel, Tag } from '@/components/ui';
 
-interface TenantDetail {
-  id: string;
-  name: string;
-  plan: string;
-  credits: number;
-  seats: number;
-  domain: string;
-}
-
-interface LedgerEntry {
-  id: string;
-  type: string;
-  description: string;
-  amount: string;
-  fee?: string;
-  by: string;
-  created_at: string;
-}
+const AMOUNTS = [250, 500, 1000, 2500] as const;
+const AMOUNT_OPTIONS = AMOUNTS.map((a) => ({ id: String(a), label: `+${a} Credits` }));
 
 export default function BillingPage() {
   const tenantId = useAuthStore((s) => s.user?.tenantId);
-  const { data: tenant, mutate: mutateTenant } = useSWR<TenantDetail>(
+  // Granting credits is an Admin-only API action; self-serve purchases need payments.
+  const isAdmin = useAuthStore((s) => s.user?.role === 'Admin');
+  const { data: tenant, mutate: mutateTenant } = useSWR<Tenant>(
     tenantId ? `/tenants/${encodeURIComponent(tenantId)}` : null,
     fetcher,
   );
@@ -38,7 +25,7 @@ export default function BillingPage() {
   const [success, setSuccess] = useState(false);
 
   async function handleTopUp() {
-    if (!tenantId) return;
+    if (!tenantId || !isAdmin) return;
     setBusy(true);
     setSuccess(false);
     try {
@@ -47,7 +34,7 @@ export default function BillingPage() {
       void mutateTenant();
       void mutateLedger();
     } catch (err) {
-      alert(errorMessage(err, 'Failed to purchase credits'));
+      alert(errorMessage(err, 'Failed to grant credits'));
     } finally {
       setBusy(false);
     }
@@ -62,36 +49,44 @@ export default function BillingPage() {
       />
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '14px' }}>
-        <KPI value={tenant?.credits ?? '0'} label="Assessment Credits" />
-        <KPI value={tenant?.plan ?? 'Enterprise'} label="Current Tier" />
-        <KPI value={tenant?.seats ?? '10'} label="Seat Allocation" />
-        <KPI value="₹0.00" label="Outstanding Balance" />
+        <KPI value={tenant?.credits ?? '—'} label="Assessment Credits" />
+        <KPI value={tenant?.plan ?? '—'} label="Current Tier" />
+        <KPI value={tenant?.seats ?? '—'} label="Seat Allocation" />
       </div>
 
       <Panel style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-        <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 600 }}>Purchase Assessment Credits</h3>
+        <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 600 }}>
+          {isAdmin ? 'Grant Assessment Credits' : 'Buy Assessment Credits'}
+        </h3>
         <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--fg-2)' }}>
-          Each candidate battery consumption deducts 1 credit per skill module. Purchased credits never expire.
+          Each candidate battery deducts 1 credit per skill module.
         </p>
 
-        <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
-          {[250, 500, 1000, 2500].map((amt) => (
-            <Button
-              key={amt}
-              variant={topUpAmount === amt ? 'primary' : 'default'}
-              onClick={() => setTopUpAmount(amt)}
-            >
-              +{amt} Credits
-            </Button>
-          ))}
-          <Button variant="mint" disabled={busy} onClick={handleTopUp}>
-            {busy ? 'Processing…' : `Purchase ${topUpAmount} Credits`}
-          </Button>
-        </div>
-
-        {success && (
-          <div style={{ padding: '8px 12px', background: 'var(--bg-2)', border: '1px solid var(--mint)', borderRadius: '4px', fontSize: '0.85rem', color: 'var(--fg-1)' }}>
-            ✅ Successfully credited <b>{topUpAmount} credits</b> to your account!
+        {isAdmin ? (
+          <>
+            <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
+              <Chips
+                label="Credit amount"
+                options={AMOUNT_OPTIONS}
+                value={String(topUpAmount)}
+                onChange={(v) => setTopUpAmount(Number(v))}
+              />
+              <Button variant="mint" disabled={busy} onClick={handleTopUp}>
+                {busy ? 'Processing…' : `Grant ${topUpAmount} Credits`}
+              </Button>
+            </div>
+            {success && (
+              <div role="status" style={{ padding: '8px 12px', background: 'var(--bg-2)', border: '1px solid var(--mint)', borderRadius: '4px', fontSize: '0.85rem', color: 'var(--fg-1)' }}>
+                ✓ Granted <b>{topUpAmount} credits</b> to this tenant.
+              </div>
+            )}
+          </>
+        ) : (
+          <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
+            <Button variant="mint" disabled>Buy credits — coming soon</Button>
+            <span style={{ fontSize: '0.85rem', color: 'var(--fg-3)' }}>
+              Online credit purchases arrive with payments. Contact your AsteAI admin for more credits.
+            </span>
           </div>
         )}
       </Panel>
@@ -111,10 +106,10 @@ export default function BillingPage() {
             </thead>
             <tbody>
               {ledger.map((tx) => {
-                const amt = Number(tx.amount);
+                const amt = tx.amount;
                 return (
                   <tr key={tx.id} style={{ borderBottom: '1px solid var(--line)' }}>
-                    <td style={{ padding: '8px', color: 'var(--fg-3)' }}>{new Date(tx.created_at).toLocaleDateString()}</td>
+                    <td style={{ padding: '8px', color: 'var(--fg-3)' }}>{new Date(tx.t).toLocaleDateString()}</td>
                     <td style={{ padding: '8px', fontFamily: 'var(--font-mono)' }}>{tx.id}</td>
                     <td style={{ padding: '8px' }}>{tx.description}</td>
                     <td style={{ padding: '8px' }}><Tag color={amt >= 0 ? 'mint' : 'grey'}>{tx.type}</Tag></td>

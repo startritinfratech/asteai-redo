@@ -12,6 +12,19 @@ export interface RenderedEmail {
 
 export interface TemplateData {
   'assessment-reset': { firstName: string; requisitionTitle: string; path: string };
+  /** `path` is /auth/reset?token=… */
+  'password-reset': { firstName: string; path: string; expiresInMinutes: number };
+  /** `path` is /auth/verify-email?token=… */
+  'verify-email': { firstName: string; path: string };
+  'password-changed': { firstName: string; reason: 'changed' | 'reset' };
+  'two-factor-enabled': { firstName: string };
+  /** An admin's decision on a submitted expert profile; `note` is the admin's note to the expert. */
+  'expert-profile-decision': {
+    firstName: string;
+    decision: 'approved' | 'rejected' | 'rework';
+    note: string | null;
+    path: '/platform/profile';
+  };
 }
 
 export type TemplateName = keyof TemplateData;
@@ -49,6 +62,42 @@ function button(href: string, label: string): string {
   return `<p style="margin:24px 0;"><a href="${escapeHtml(href)}" style="display:inline-block;padding:10px 18px;border-radius:8px;background:#2f6fe8;color:#ffffff;text-decoration:none;font-weight:600;">${escapeHtml(label)}</a></p>`;
 }
 
+/** A simple notice: greeting, paragraphs, optional button and a fallback link. */
+function notice(
+  subject: string, firstName: string, paragraphs: string[], baseUrl: string, link?: { path: string; label: string },
+): RenderedEmail {
+  const greeting = firstName ? `Hi ${firstName},` : 'Hi,';
+  const url = link ? siteUrl(baseUrl, link.path) : null;
+  const html = [
+    `<p>${escapeHtml(greeting)}</p>`,
+    ...paragraphs.map((p) => `<p>${escapeHtml(p)}</p>`),
+    ...(url && link ? [
+      button(url, link.label),
+      `<p style="font-size:13px;color:#6b6e8a;">If the button doesn't work, copy this link into your browser:<br>${escapeHtml(url)}</p>`,
+    ] : []),
+  ].join('');
+  const text = [greeting, '', ...paragraphs.flatMap((p) => [p, '']), ...(url && link ? [`${link.label}: ${url}`] : [])]
+    .join('\n').trimEnd();
+  return { subject, html: layout(subject, html), text };
+}
+
+const EXPERT_DECISION_COPY: Record<TemplateData['expert-profile-decision']['decision'], { subject: string; body: string }> = {
+  approved: {
+    subject: 'Your expert profile is approved',
+    body: 'Good news: your AsteAI expert profile has been approved and is now listed in the expert directory, where buyers can find you.',
+  },
+  rework: {
+    subject: 'Changes requested on your expert profile',
+    body: 'An AsteAI reviewer looked at your expert profile and asked for some changes before it can be listed. Update your profile and submit it again.',
+  },
+  rejected: {
+    subject: 'Your expert profile was not approved',
+    body: 'An AsteAI reviewer looked at your expert profile and could not approve it for the expert directory.',
+  },
+};
+
+const SECURITY_FOOTNOTE = 'If this wasn’t you, reset your password straight away and contact AsteAI support.';
+
 type Renderer<T> = (data: T, baseUrl: string) => RenderedEmail;
 
 const TEMPLATES: { [K in TemplateName]: Renderer<TemplateData[K]> } = {
@@ -72,6 +121,60 @@ const TEMPLATES: { [K in TemplateName]: Renderer<TemplateData[K]> } = {
         `Start the assessment: ${url}`,
       ].join('\n'),
     };
+  },
+
+  'password-reset': ({ firstName, path, expiresInMinutes }, baseUrl) => notice(
+    'Reset your AsteAI password',
+    firstName,
+    [
+      'We received a request to reset the password for your AsteAI account. Use the button below to choose a new one.',
+      `The link works once and expires in ${expiresInMinutes} minutes. If you didn’t ask for this, you can ignore this email; your password stays the same.`,
+    ],
+    baseUrl,
+    { path, label: 'Reset password' },
+  ),
+
+  'verify-email': ({ firstName, path }, baseUrl) => notice(
+    'Confirm your email address',
+    firstName,
+    ['Please confirm that this is your email address for AsteAI. The link expires in 24 hours.'],
+    baseUrl,
+    { path, label: 'Confirm email' },
+  ),
+
+  'password-changed': ({ firstName, reason }, baseUrl) => notice(
+    'Your AsteAI password was changed',
+    firstName,
+    [
+      reason === 'reset'
+        ? 'The password for your AsteAI account was just reset using a link sent to this address. You have been signed out on every device.'
+        : 'The password for your AsteAI account was just changed. Other devices have been signed out.',
+      SECURITY_FOOTNOTE,
+    ],
+    baseUrl,
+    { path: '/auth/forgot', label: 'Reset password' },
+  ),
+
+  'two-factor-enabled': ({ firstName }, baseUrl) => notice(
+    'Two-factor authentication is on',
+    firstName,
+    [
+      'Two-factor authentication is now on for your AsteAI account. Signing in will ask for a code from your authenticator app. Keep your backup codes somewhere safe.',
+      SECURITY_FOOTNOTE,
+    ],
+    baseUrl,
+    { path: '/platform/security', label: 'Review security settings' },
+  ),
+
+  'expert-profile-decision': ({ firstName, decision, note, path }, baseUrl) => {
+    const copy = EXPERT_DECISION_COPY[decision];
+    return notice(
+      copy.subject,
+      firstName,
+      [copy.body, ...(note ? [`Note from the reviewer: ${note}`] : [])],
+      baseUrl,
+      { path, label: 'Open your profile' },
+    );
   },
 };
 

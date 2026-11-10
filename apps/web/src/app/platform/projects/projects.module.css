@@ -14,3 +14,37 @@
 }
 .mAmt { margin-left: auto; font-family: var(--font-mono); color: var(--fg-2); }
 .footer { display: flex; gap: 20px; padding-top: 8px; border-top: 1px solid var(--line); }
+.label { font-size: .72rem; color: var(--fg-3); text-transform: uppercase; letter-spacing: .04em; }
+.muted { font-size: .82rem; color: var(--fg-3); }
+.error { margin: 0; font-size: .82rem; color: var(--rose); }
+.link { font-size: .84rem; color: var(--blue); align-self: center; }
+.footer .link { margin-left: auto; }
+.proposals { display: flex; flex-direction: column; gap: 8px; }
+.proposal {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-size: .84rem;
+  min-width: 0;
+}
+.proposalMain { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.proposalWho { font-weight: 600; overflow-wrap: anywhere; }
+.proposalNote { margin: 0; color: var(--fg-2); font-size: .82rem; overflow-wrap: anywhere; }
+.proposalActions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+
+/* Create-contract dialog */
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 40px 16px;
+  overflow-y: auto;
+  background: rgba(0, 0, 0, .55);
+}
+.dialog { width: 100%; max-width: 760px; }

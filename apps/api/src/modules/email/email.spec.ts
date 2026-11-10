@@ -24,6 +24,26 @@ describe('templates', () => {
     assert.equal(siteUrl('https://a.test', 'https://evil.test'), 'https://a.test/');
   });
 
+  it('renders the expert profile decision with the escaped reviewer note', () => {
+    const out = render('expert-profile-decision', {
+      firstName: '<i>Asha</i>', decision: 'rework', note: 'Add a <script>alert(1)</script> & portfolio', path: '/platform/profile',
+    }, 'https://app.asteai.test');
+    assert.equal(out.subject, 'Changes requested on your expert profile');
+    assert.ok(!out.html.includes('<script>') && out.html.includes('&lt;script&gt;alert(1)&lt;/script&gt; &amp; portfolio'));
+    assert.ok(out.html.includes('&lt;i&gt;Asha&lt;/i&gt;'));
+    assert.ok(out.html.includes('https://app.asteai.test/platform/profile'));
+    assert.match(out.text, /Note from the reviewer: Add a <script>alert\(1\)<\/script> & portfolio/);
+
+    const approved = render('expert-profile-decision', {
+      firstName: 'Asha', decision: 'approved', note: null, path: '/platform/profile',
+    }, 'https://app.asteai.test');
+    assert.equal(approved.subject, 'Your expert profile is approved');
+    assert.doesNotMatch(approved.text, /Note from the reviewer/);
+    assert.equal(render('expert-profile-decision', {
+      firstName: 'Asha', decision: 'rejected', note: 'Not a fit', path: '/platform/profile',
+    }, 'https://a.test').subject, 'Your expert profile was not approved');
+  });
+
   it('escapes every HTML-significant character', () => {
     assert.equal(escapeHtml(`<a href="x">'&'</a>`), '&lt;a href=&quot;x&quot;&gt;&#39;&amp;&#39;&lt;/a&gt;');
   });
@@ -60,6 +80,24 @@ describe('EmailWorker', () => {
     assert.deepEqual(got, { to: 'a@b.test', subject: 'S', html: '<p>H</p>', text: 'H' });
     assert.match(calls[2].sql, /SET status = 'sent'/);
     assert.deepEqual(calls[2].params, ['E1', 'ses-123']);
+  });
+
+  it('blanks the body of a sent email but keeps subject, template and recipient', async () => {
+    const { worker, calls } = setup([row(1)], async () => ({ id: 'ses-1' }));
+    await worker.processBatch();
+    const sent = calls[2].sql;
+    assert.match(sent, /SET status = 'sent'/);
+    assert.match(sent, /html = ''/);
+    assert.match(sent, /text = ''/);
+    assert.doesNotMatch(sent, /subject|template|to_address/);
+  });
+
+  it('keeps the body of a failed email for the retry', async () => {
+    for (const err of [new EmailSendError('Throttling', false), new EmailSendError('MessageRejected', true)]) {
+      const { worker, calls } = setup([row(1)], async () => { throw err; });
+      await worker.processBatch();
+      assert.doesNotMatch(calls[2].sql, /html|text =/, err.message);
+    }
   });
 
   it('retries a temporary failure later with backoff', async () => {

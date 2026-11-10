@@ -26,6 +26,11 @@ interface OutboxRow {
  * with FOR UPDATE SKIP LOCKED so replicas share the work without double-sending.
  * A failed send is retried with backoff up to MAX_ATTEMPTS, except permanent
  * failures (rejected address, unverified sender), which fail at once.
+ *
+ * Once a row is sent its html and text are blanked: bodies can hold single-use links
+ * (password reset, email verification) that must not sit in the database in clear.
+ * Subject, template and recipient stay as the record. Failed rows keep their body so
+ * they can be retried.
  */
 @Injectable()
 export class EmailWorker implements OnApplicationBootstrap, OnApplicationShutdown {
@@ -95,7 +100,9 @@ export class EmailWorker implements OnApplicationBootstrap, OnApplicationShutdow
       try {
         const { id } = await this.transport.send({ to: row.to_address, subject: row.subject, html: row.html, text: row.text });
         await this.db.query(
-          `UPDATE email_outbox SET status = 'sent', sent_at = NOW(), provider_id = $2, last_error = NULL WHERE id = $1`,
+          `UPDATE email_outbox
+              SET status = 'sent', sent_at = NOW(), provider_id = $2, last_error = NULL, html = '', text = ''
+            WHERE id = $1`,
           [row.id, id],
         );
         sent += 1;

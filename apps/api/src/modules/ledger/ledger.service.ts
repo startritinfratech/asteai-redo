@@ -1,30 +1,32 @@
 import { Injectable, Inject } from '@nestjs/common';
 import { Pool } from 'pg';
 import { DB_POOL } from '../../database/database.module';
+import type { LedgerEntry, WalletSummary } from '@asteai/types';
 import { generateId } from '../../common/utils/ids';
+import { LedgerRow, mapLedgerRow } from './ledger.mapper';
 
 @Injectable()
 export class LedgerService {
   constructor(@Inject(DB_POOL) private readonly db: Pool) {}
 
-  async findForTenant(tenantId: string, pageSize: number, offset: number) {
-    const { rows } = await this.db.query(
+  async findForTenant(tenantId: string, pageSize: number, offset: number): Promise<LedgerEntry[]> {
+    const { rows } = await this.db.query<LedgerRow>(
       `SELECT * FROM ledger_entries WHERE tenant_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3`,
       [tenantId, pageSize, offset],
     );
-    return rows;
+    return rows.map(mapLedgerRow);
   }
 
-  async findForUser(userId: string) {
-    const { rows } = await this.db.query(
+  async findForUser(userId: string): Promise<LedgerEntry[]> {
+    const { rows } = await this.db.query<LedgerRow>(
       `SELECT * FROM ledger_entries WHERE user_id = $1 ORDER BY created_at DESC LIMIT 50`,
       [userId],
     );
-    return rows;
+    return rows.map(mapLedgerRow);
   }
 
-  async getWallet(userId: string) {
-    const { rows } = await this.db.query(
+  async getWallet(userId: string): Promise<WalletSummary> {
+    const { rows } = await this.db.query<{ earned: string; fees: string; pending: string }>(
       `SELECT
          COALESCE(SUM(CASE WHEN type IN ('Escrow release', 'Deposit') THEN amount ELSE 0 END), 0) AS earned,
          COALESCE(SUM(CASE WHEN type = 'Fee' THEN ABS(amount) ELSE 0 END), 0) AS fees,
@@ -32,15 +34,20 @@ export class LedgerService {
        FROM ledger_entries WHERE user_id = $1`,
       [userId],
     );
-    return rows[0] ?? { earned: 0, fees: 0, pending: 0 };
+    const row = rows[0];
+    return {
+      earned: Number(row?.earned ?? 0),
+      fees: Number(row?.fees ?? 0),
+      pending: Number(row?.pending ?? 0),
+    };
   }
 
   async record(entry: {
     tenantId?: string; userId?: string; type: string; description: string;
     amount: number; unit?: string; payeeId?: string; fee?: number; by: string; ref?: string;
-  }) {
+  }): Promise<LedgerEntry> {
     const id = generateId('TX');
-    const { rows } = await this.db.query(
+    const { rows } = await this.db.query<LedgerRow>(
       `INSERT INTO ledger_entries
          (id, tenant_id, user_id, type, description, amount, unit, payee_id, fee, by, ref)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
@@ -49,6 +56,6 @@ export class LedgerService {
         entry.amount, entry.unit, entry.payeeId, entry.fee, entry.by, entry.ref,
       ],
     );
-    return rows[0];
+    return mapLedgerRow(rows[0]);
   }
 }

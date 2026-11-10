@@ -16,9 +16,14 @@ export interface ProjectRow {
   packaged: boolean;
   created_at: Date | string;
   buyer_name?: string;
+  /** Selected by the list and detail queries: the contract for the awarded proposal, if any. */
+  contract_id?: string | null;
 }
 
-export function mapProjectRow(row: ProjectRow): Project & { buyerName?: string } {
+/** A project as the API returns it. `contractId` is undefined when the query didn't select it. */
+export type ProjectResponse = Project & { buyerName?: string; contractId?: string | null };
+
+export function mapProjectRow(row: ProjectRow): ProjectResponse {
   return {
     id: row.id,
     buyerId: row.buyer_id,
@@ -36,5 +41,6 @@ export function mapProjectRow(row: ProjectRow): Project & { buyerName?: string }
     rating: row.rating ?? null,
     packaged: row.packaged,
     buyerName: row.buyer_name,
+    ...(row.contract_id !== undefined && { contractId: row.contract_id }),
   };
 }

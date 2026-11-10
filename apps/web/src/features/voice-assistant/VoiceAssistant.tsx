@@ -15,9 +15,10 @@ type Phase = 'idle' | 'listening' | 'thinking' | 'confirm';
 
 /**
  * Pages where the assistant is switched off. During an assessment it could otherwise be
- * asked to solve a question or pick an answer.
+ * asked to solve a question or pick an answer; in the interview Studio it would compete
+ * with the live AI interview for the microphone.
  */
-const VOICE_OFF_PATHS = ['/platform/assess'];
+const VOICE_OFF_PATHS = ['/platform/assess', '/platform/studio'];
 
 export function VoiceAssistant({ role }: { role: UserRole }) {
   const pathname = usePathname();
@@ -41,9 +42,21 @@ function VoiceDock({ role, pathname }: { role: UserRole; pathname: string }) {
   const [pending, setPending] = useState<{ cmd: VoiceCommandResult; targets: RegisteredTarget[] } | null>(null);
   const [speechOk, setSpeechOk] = useState(false);
   const listening = useRef<Listening | null>(null);
+  const mounted = useRef(true);
   const lang = typeof navigator !== 'undefined' ? navigator.language : 'en';
 
   useEffect(() => setSpeechOk(isSpeechSupported()), []);
+
+  // Leaving the page (or entering a voice-off page) must release the microphone.
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      listening.current?.cancel();
+      listening.current = null;
+      stopSpeaking();
+    };
+  }, []);
 
   const say = useCallback((text: string) => {
     setReply(text);
@@ -93,14 +106,18 @@ function VoiceDock({ role, pathname }: { role: UserRole; pathname: string }) {
     setReply('');
     setPending(null);
     setPhase('listening');
-    listening.current = listenOnce(lang);
+    const current = listenOnce(lang);
+    listening.current = current;
     try {
-      await handle(await listening.current.result);
+      const utterance = await current.result;
+      if (!mounted.current) return;
+      await handle(utterance);
     } catch (err) {
+      if (!mounted.current) return;
       say(errorMessage(err));
       setPhase('idle');
     } finally {
-      listening.current = null;
+      if (listening.current === current) listening.current = null;
     }
   }, [lang, handle, say]);
 

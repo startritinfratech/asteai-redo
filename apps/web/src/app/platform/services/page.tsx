@@ -1,6 +1,5 @@
 'use client';
 
-import { useState } from 'react';
 import useSWR from 'swr';
 import { fetcher } from '@/lib/api';
 import { Button, Empty, PageHeader, Panel, Tag } from '@/components/ui';
@@ -18,7 +17,6 @@ interface ServicePackage {
 
 export default function ServicesPage() {
   const { data: services, isLoading } = useSWR<ServicePackage[]>('/projects/services', fetcher);
-  const [bookedId, setBookedId] = useState<string | null>(null);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
@@ -30,11 +28,9 @@ export default function ServicesPage() {
 
       {isLoading && <Empty message="Loading service offerings…" />}
 
-      {bookedId && (
-        <div style={{ padding: '12px', background: 'var(--bg-2)', border: '1px solid var(--mint)', borderRadius: '6px', fontSize: '0.85rem' }}>
-          🎉 <b>Service Package Booked:</b> Order placed for package <b>{bookedId}</b>. Escrow hold initialized and expert notified.
-        </div>
-      )}
+      <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--fg-3)' }}>
+        Ordering a package is coming soon. These are sample packages; nothing can be booked or paid for yet.
+      </p>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '14px' }}>
         {services?.map((s) => (
@@ -56,8 +52,8 @@ export default function ServicesPage() {
               <span style={{ fontSize: '0.8rem', color: 'var(--fg-2)' }}>
                 Provider: <b>{s.expertName}</b>
               </span>
-              <Button variant="sm" onClick={() => setBookedId(s.id)}>
-                Order Package
+              <Button variant="sm" disabled>
+                Order (coming soon)
               </Button>
             </div>
           </Panel>

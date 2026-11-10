@@ -269,6 +269,13 @@ export interface LedgerEntry {
   ref: string;
 }
 
+/** GET /ledger/wallet: a user's wallet totals (in INR). */
+export interface WalletSummary {
+  earned: number;
+  fees: number;
+  pending: number;
+}
+
 // ─── Dashboards ─────────────────────────────────────────────────────────────
 
 /** GET /admin/stats. Postgres COUNT(*) values arrive as strings. */
@@ -431,3 +438,8 @@ export interface AssessmentSessionAdmin {
   resetReason: string | null;
   resetByName: string | null;
 }
+
+export * from './chat';
+export * from './contract';
+export * from './profile';
+export * from './account';

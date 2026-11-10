@@ -26,6 +26,9 @@ import { InterviewsModule } from './modules/interviews/interviews.module';
 import { AssistantModule } from './modules/assistant/assistant.module';
 import { HealthModule } from './modules/health/health.module';
 import { EmailModule } from './modules/email/email.module';
+import { ChatsModule } from './modules/chats/chats.module';
+import { ContractsModule } from './modules/contracts/contracts.module';
+import { ProfilesModule } from './modules/profiles/profiles.module';
 
 @Module({
   imports: [
@@ -58,6 +61,9 @@ import { EmailModule } from './modules/email/email.module';
     AssistantModule,
     HealthModule,
     EmailModule,
+    ChatsModule,
+    ContractsModule,
+    ProfilesModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },

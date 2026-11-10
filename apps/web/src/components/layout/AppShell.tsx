@@ -21,7 +21,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (hydrated && !user) {
-      router.replace(`${LOGIN_PATH}?next=${encodeURIComponent(pathname)}`);
+      // Keep the query string too (e.g. ?id=…); read it here rather than through
+      // useSearchParams so the shell does not need a Suspense boundary.
+      const search = typeof window !== 'undefined' ? window.location.search : '';
+      router.replace(`${LOGIN_PATH}?next=${encodeURIComponent(`${pathname}${search}`)}`);
     }
   }, [hydrated, user, pathname, router]);
 

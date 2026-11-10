@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Query, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { LedgerService } from './ledger.service';
@@ -8,6 +8,10 @@ import { RolesGuard } from '../../common/guards/roles.guard';
 import { User } from '@asteai/types';
 import { paginate } from '../../common/utils/pagination';
 
+/**
+ * Read-only ledger views. There is deliberately no user-facing deposit endpoint: wallet
+ * credits must come from a verified payment-provider webhook, never from the browser.
+ */
 @ApiTags('ledger')
 @ApiBearerAuth()
 @UseGuards(AuthGuard('jwt'), RolesGuard)
@@ -32,17 +36,5 @@ export class LedgerController {
   @Get('entries')
   userEntries(@CurrentUser() user: User) {
     return this.svc.findForUser(user.id);
-  }
-
-  @Post('deposit')
-  deposit(@CurrentUser() user: User, @Body() body: { amount: number; description?: string }) {
-    return this.svc.record({
-      userId: user.id,
-      tenantId: user.tenantId ?? undefined,
-      type: 'Deposit',
-      description: body.description ?? 'Wallet deposit',
-      amount: Math.abs(body.amount),
-      by: `${user.firstName} ${user.lastName}`,
-    });
   }
 }

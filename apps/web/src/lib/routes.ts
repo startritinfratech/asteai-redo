@@ -36,9 +36,11 @@ export const NAV: Record<UserRole, NavSection[]> = {
       item('integrity', 'Integrity Queue'),
     ]],
     ['Account', [
+      item('messages', 'Messages'),
       item('billing', 'Billing & Credits'),
       item('team', 'Team & Roles'),
       item('verify', 'Verify a Passport'),
+      item('security', 'Security'),
     ]],
   ],
   Candidate: [
@@ -50,8 +52,10 @@ export const NAV: Record<UserRole, NavSection[]> = {
       item('studio', 'AI Interview Studio'),
     ]],
     ['Account', [
+      item('messages', 'Messages'),
       item('privacy', 'Privacy & Consent'),
       item('verify', 'Verify a Passport'),
+      item('security', 'Security'),
     ]],
   ],
   Freelancer: [
@@ -63,7 +67,10 @@ export const NAV: Record<UserRole, NavSection[]> = {
       item('passport', 'Talent Passport'),
     ]],
     ['Account', [
+      item('messages', 'Messages'),
+      item('profile', 'My Profile'),
       item('privacy', 'Privacy & Consent'),
+      item('security', 'Security'),
     ]],
   ],
   Buyer: [
@@ -76,7 +83,10 @@ export const NAV: Record<UserRole, NavSection[]> = {
       item('disputes', 'Disputes'),
     ]],
     ['Account', [
+      item('messages', 'Messages'),
+      item('profile', 'Company Profile'),
       item('verify', 'Verify a Passport'),
+      item('security', 'Security'),
     ]],
   ],
   Admin: [
@@ -84,6 +94,7 @@ export const NAV: Record<UserRole, NavSection[]> = {
       item('admin', 'Master Control'),
       item('ai-interviews', 'AI Interviews'),
       item('assessment-sessions', 'Assessment Sessions'),
+      item('expert-approvals', 'Expert Approvals'),
       item('tenants', 'Tenants & Plans'),
       item('integrity', 'Integrity Review'),
       item('trust', 'Trust & Safety'),
@@ -96,6 +107,10 @@ export const NAV: Record<UserRole, NavSection[]> = {
       item('mkt/campaigns', 'Campaigns'),
       item('mkt/audiences', 'Audiences'),
       item('mkt/report', 'Performance'),
+    ]],
+    ['Account', [
+      item('messages', 'Messages'),
+      item('security', 'Security'),
     ]],
   ],
 };

@@ -111,7 +111,7 @@ export function InterviewRoom({ interviewId, connection, refreshConnection, onFi
   const cleanup = useCallback(() => {
     stopVAD();
     if (maxRecTimerRef.current) clearTimeout(maxRecTimerRef.current);
-    if (faceTimerRef.current) clearInterval(faceTimerRef.current);
+    if (faceTimerRef.current) { clearInterval(faceTimerRef.current); faceTimerRef.current = null; }
     if (finalizeTimerRef.current) clearTimeout(finalizeTimerRef.current);
     pendingClipsRef.current = [];
     audioRef.current?.pause();
@@ -315,6 +315,8 @@ export function InterviewRoom({ interviewId, connection, refreshConnection, onFi
     };
 
     ws.onopen = () => {
+      // A reconnect opens a new socket: never leave the previous face-check running.
+      if (faceTimerRef.current) clearInterval(faceTimerRef.current);
       faceTimerRef.current = setInterval(faceCheck, FACE_CHECK_MS);
     };
 
@@ -363,6 +365,8 @@ export function InterviewRoom({ interviewId, connection, refreshConnection, onFi
 
     ws.onerror = () => setNotice('Connection error.');
     ws.onclose = (event) => {
+      // No socket, no face checks (they would report against a dead session).
+      if (faceTimerRef.current) { clearInterval(faceTimerRef.current); faceTimerRef.current = null; }
       if (finishedRef.current) return;
       if (event.code === 4001) { setPhase('error'); setNotice('The interview session was refused. Please start again.'); return; }
       if (event.code === 4029) { setPhase('error'); setNotice('This interview is already open in another tab.'); return; }

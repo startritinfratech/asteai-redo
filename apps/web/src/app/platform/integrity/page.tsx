@@ -83,6 +83,7 @@ export default function IntegrityPage() {
                 {selectedId === item.id ? (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                     <textarea
+                      aria-label="Reviewer notes"
                       placeholder="Add investigation or reviewer notes (e.g., 'Checked screen recording, candidate had dual-monitor notification')..."
                       value={notes}
                       onChange={(e) => setNotes(e.target.value)}

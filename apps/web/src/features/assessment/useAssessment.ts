@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { AssessmentStep } from '@asteai/types';
 import { ApiError, errorMessage } from '@/lib/api';
 import { assessmentApi } from './api';
+import { eventsToSend, remainingEvents } from './integrityEvents';
 import type { Item } from './items.types';
 
 export interface AssessmentState {
@@ -84,14 +85,14 @@ export function useAssessment(requisitionId: string): AssessmentState {
   const submit = useCallback(
     (response: Record<string, unknown>) => {
       if (!step?.item || busy) return;
-      const sent = { ...events.current };
+      // The API accepts at most 50 of each per answer; the rest goes with later answers.
+      const sent = eventsToSend(events.current);
       setBusy(true);
       setError(null);
       assessmentApi
         .answer(step.sessionId, step.item.id, response, sent)
         .then((next) => {
-          events.current.blur -= sent.blur;
-          events.current.paste -= sent.paste;
+          events.current = remainingEvents(events.current, sent);
           setStep(next);
         })
         .catch(async (err) => {

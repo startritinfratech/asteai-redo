@@ -1,0 +1,35 @@
+/* Additions to auth.module.css for the two-factor sign-in step and the "Forgot password?" link. */
+
+.linkButton {
+  padding: 4px 2px;
+  border: 0;
+  background: transparent;
+  color: var(--blue-2);
+  font: inherit;
+  font-size: .9rem;
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.linkButton:hover { color: var(--fg); }
+
+.codeInput {
+  font-family: var(--font-mono);
+  font-size: 1.15rem;
+  letter-spacing: .2em;
+}
+
+.stepActions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px 16px;
+}
+
+.forgotLink {
+  color: var(--blue-2);
+  font-size: .84rem;
+  font-weight: 700;
+}
+.forgotLink:hover { color: var(--fg); }

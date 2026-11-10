@@ -1,6 +1,6 @@
 import { Type } from 'class-transformer';
 import {
-  ArrayMaxSize, IsBoolean, IsIn, IsOptional, IsString, Length, Matches, MaxLength, ValidateNested,
+  ArrayMaxSize, IsArray, IsBoolean, IsIn, IsOptional, IsString, Length, Matches, MaxLength, ValidateNested,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { VOICE_TARGET_KINDS, type VoiceTargetKind } from '@asteai/types';
@@ -28,6 +28,6 @@ export class VoiceCommandDto {
   @IsOptional() @IsString() @Length(2, 16) language?: string;
 
   @ApiProperty({ type: [VoiceTargetDto] })
-  @ValidateNested({ each: true }) @Type(() => VoiceTargetDto) @ArrayMaxSize(150)
+  @IsArray() @ArrayMaxSize(150) @ValidateNested({ each: true }) @Type(() => VoiceTargetDto)
   targets: VoiceTargetDto[];
 }

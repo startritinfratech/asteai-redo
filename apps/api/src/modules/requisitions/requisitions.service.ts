@@ -1,4 +1,4 @@
-import { Injectable, Inject, NotFoundException, ForbiddenException } from '@nestjs/common';
+import { ConflictException, Injectable, Inject, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { Pool, type QueryResultRow } from 'pg';
 import { DB_POOL } from '../../database/database.module';
 import { assertTenantAccess } from '../../common/utils/access';
@@ -7,6 +7,23 @@ import { UpdateRequisitionDto } from './dto/update-requisition.dto';
 import { ReqStatus, Requisition, User } from '@asteai/types';
 import { generateId } from '../../common/utils/ids';
 import { Pagination } from '../../common/utils/pagination';
+
+/**
+ * Status moves an owner may make. Closed and Filled are final for everyone but admins,
+ * who may make any change.
+ */
+export const REQ_STATUS_MOVES: Record<ReqStatus, readonly ReqStatus[]> = {
+  Draft: ['Open', 'Closed'],
+  Open: ['Paused', 'Closed', 'Filled'],
+  Paused: ['Open', 'Closed', 'Filled'],
+  Closed: [],
+  Filled: [],
+};
+
+export function canMoveRequisition(from: ReqStatus, to: ReqStatus, isAdmin: boolean): boolean {
+  if (from === to) return true; // no change
+  return isAdmin || REQ_STATUS_MOVES[from].includes(to);
+}
 
 @Injectable()
 export class RequisitionsService {
@@ -94,18 +111,42 @@ export class RequisitionsService {
       throw new ForbiddenException('Only the owner can edit a requisition');
     }
 
+    if (dto.status && !canMoveRequisition(existing.status, dto.status, user.role === 'Admin')) {
+      throw new ConflictException(`Cannot move a requisition from '${existing.status}' to '${dto.status}'`);
+    }
+
+    // Every field UpdateRequisitionDto allows; an omitted field keeps its value. The status
+    // check is repeated in the WHERE so a concurrent status change isn't overwritten.
     const { rows } = await this.db.query(
       `UPDATE requisitions SET
-         title        = COALESCE($1, title),
-         status       = COALESCE($2, status),
-         headcount    = COALESCE($3, headcount),
-         threshold    = COALESCE($4, threshold),
-         brief        = COALESCE($5, brief),
-         updated_at   = NOW()
-       WHERE id = $6
+         title         = COALESCE($1, title),
+         industry      = COALESCE($2, industry),
+         func          = COALESCE($3, func),
+         ech_level     = COALESCE($4, ech_level),
+         tier          = COALESCE($5::candidate_tier_enum, tier),
+         weight_iq     = COALESCE($6, weight_iq),
+         weight_eq     = COALESCE($7, weight_eq),
+         weight_grit   = COALESCE($8, weight_grit),
+         language      = COALESCE($9, language),
+         location      = COALESCE($10, location),
+         headcount     = COALESCE($11, headcount),
+         min_shortlist = COALESCE($12, min_shortlist),
+         threshold     = COALESCE($13, threshold),
+         stack         = COALESCE($14::text[], stack),
+         brief         = COALESCE($15, brief),
+         status        = COALESCE($16::req_status_enum, status),
+         updated_at    = NOW()
+       WHERE id = $17 AND status = $18
        RETURNING *`,
-      [dto.title, dto.status, dto.headcount, dto.threshold, dto.brief, id],
+      [
+        dto.title, dto.industry, dto.func, dto.echLevel, dto.tier,
+        dto.weights?.iq, dto.weights?.eq, dto.weights?.grit,
+        dto.lang, dto.location, dto.headcount, dto.minShortlist, dto.threshold,
+        dto.stack, dto.brief, dto.status,
+        id, existing.status,
+      ],
     );
+    if (!rows.length) throw new ConflictException('The requisition changed meanwhile; reload and try again');
     return this.mapRow(rows[0]);
   }
 

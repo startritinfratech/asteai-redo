@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import useSWR from 'swr';
 import { useAuthStore } from '@/store/auth';
-import { api, errorMessage, fetcher } from '@/lib/api';
+import { api, ApiError, errorMessage, fetcher } from '@/lib/api';
 import { Button, Empty, PageHeader, Panel, Tag } from '@/components/ui';
 
 interface TeamMember {
@@ -28,7 +28,8 @@ export default function TeamPage() {
   const [email, setEmail] = useState('');
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
-  const [role, setRole] = useState('Employer');
+  // The API only adds Employer accounts to a tenant team.
+  const role = 'Employer' as const;
   const [title, setTitle] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -51,7 +52,11 @@ export default function TeamPage() {
       setOpenInvite(false);
       void mutate();
     } catch (err) {
-      alert(errorMessage(err, 'Failed to add team member'));
+      alert(
+        err instanceof ApiError && err.status === 409
+          ? 'That email already has an AsteAI account'
+          : errorMessage(err, 'Failed to add team member'),
+      );
     } finally {
       setBusy(false);
     }
@@ -79,8 +84,9 @@ export default function TeamPage() {
           <form onSubmit={handleInvite} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
               <div>
-                <label style={{ fontSize: '0.75rem', color: 'var(--fg-3)', display: 'block', marginBottom: '4px' }}>First Name</label>
+                <label htmlFor="team-first-name" style={{ fontSize: '0.75rem', color: 'var(--fg-3)', display: 'block', marginBottom: '4px' }}>First Name</label>
                 <input
+                  id="team-first-name"
                   type="text"
                   required
                   value={firstName}
@@ -89,8 +95,9 @@ export default function TeamPage() {
                 />
               </div>
               <div>
-                <label style={{ fontSize: '0.75rem', color: 'var(--fg-3)', display: 'block', marginBottom: '4px' }}>Last Name</label>
+                <label htmlFor="team-last-name" style={{ fontSize: '0.75rem', color: 'var(--fg-3)', display: 'block', marginBottom: '4px' }}>Last Name</label>
                 <input
+                  id="team-last-name"
                   type="text"
                   required
                   value={lastName}
@@ -101,8 +108,9 @@ export default function TeamPage() {
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
               <div>
-                <label style={{ fontSize: '0.75rem', color: 'var(--fg-3)', display: 'block', marginBottom: '4px' }}>Work Email</label>
+                <label htmlFor="team-work-email" style={{ fontSize: '0.75rem', color: 'var(--fg-3)', display: 'block', marginBottom: '4px' }}>Work Email</label>
                 <input
+                  id="team-work-email"
                   type="email"
                   required
                   value={email}
@@ -111,8 +119,9 @@ export default function TeamPage() {
                 />
               </div>
               <div>
-                <label style={{ fontSize: '0.75rem', color: 'var(--fg-3)', display: 'block', marginBottom: '4px' }}>Role / Title</label>
+                <label htmlFor="team-role-title" style={{ fontSize: '0.75rem', color: 'var(--fg-3)', display: 'block', marginBottom: '4px' }}>Role / Title</label>
                 <input
+                  id="team-role-title"
                   type="text"
                   placeholder="e.g. Senior Talent Partner"
                   value={title}

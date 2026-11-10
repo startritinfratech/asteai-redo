@@ -2,7 +2,15 @@
 
 import useSWR from 'swr';
 import { fetcher } from '@/lib/api';
-import { Empty, KPI, PageHeader, Panel, Tag } from '@/components/ui';
+import { fourFifthsReport, type ImpactStatus } from '@/lib/fairness';
+import { Empty, KPI, PageHeader, Panel, Tag, type TagColor } from '@/components/ui';
+
+const STATUS_COLOR: Record<ImpactStatus, TagColor> = { Pass: 'mint', Review: 'amber', 'No data': 'grey' };
+const OVERALL_LABEL: Record<ImpactStatus, string> = {
+  Pass: 'Pass: no group below 4/5ths',
+  Review: 'Review: adverse impact detected',
+  'No data': 'Not enough data',
+};
 
 interface DashboardStats {
   requisitions?: { status: string; count: string }[];
@@ -32,6 +40,15 @@ export default function AnalyticsPage() {
     '/analytics/employer/fairness',
     fetcher,
   );
+
+  const report = fourFifthsReport(
+    (fairness ?? []).map((row) => ({
+      group: row.lang || 'English (Default)',
+      total: Number(row.total),
+      selected: Number(row.shortlisted),
+    })),
+  );
+  const avgFitByGroup = new Map((fairness ?? []).map((row) => [row.lang || 'English (Default)', row.avg_fit]));
 
   const stats = dash?.assessmentStats;
   const stages = dash?.applicationsByStage ?? [];
@@ -81,7 +98,7 @@ export default function AnalyticsPage() {
                   Monitors selection rates across candidate preferred languages to ensure compliance with the 4/5ths (80%) fairness rule.
                 </p>
               </div>
-              <Tag color="mint">Compliant (No Disparate Impact)</Tag>
+              {fairness && <Tag color={STATUS_COLOR[report.overall]}>{OVERALL_LABEL[report.overall]}</Tag>}
             </div>
 
             {fairness && fairness.length > 0 ? (
@@ -92,23 +109,23 @@ export default function AnalyticsPage() {
                     <th style={{ padding: '8px' }}>Total Candidates</th>
                     <th style={{ padding: '8px' }}>Shortlisted</th>
                     <th style={{ padding: '8px' }}>Selection Rate</th>
+                    <th style={{ padding: '8px' }}>Impact Ratio</th>
                     <th style={{ padding: '8px' }}>Average Fit Score</th>
-                    <th style={{ padding: '8px' }}>Status</th>
+                    <th style={{ padding: '8px' }}>4/5ths Rule</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {fairness.map((row) => {
-                    const total = Number(row.total);
-                    const shortlisted = Number(row.shortlisted);
-                    const rate = total > 0 ? (shortlisted / total) * 100 : 0;
+                  {report.groups.map((g) => {
+                    const avgFit = avgFitByGroup.get(g.group);
                     return (
-                      <tr key={row.lang} style={{ borderBottom: '1px solid var(--line)' }}>
-                        <td style={{ padding: '8px', fontWeight: 500 }}>{row.lang || 'English (Default)'}</td>
-                        <td style={{ padding: '8px' }}>{row.total}</td>
-                        <td style={{ padding: '8px' }}>{row.shortlisted}</td>
-                        <td style={{ padding: '8px' }}>{rate.toFixed(1)}%</td>
-                        <td style={{ padding: '8px' }}>{row.avg_fit ? `${Number(row.avg_fit).toFixed(1)}%` : '—'}</td>
-                        <td style={{ padding: '8px' }}><Tag color="mint">Passed</Tag></td>
+                      <tr key={g.group} style={{ borderBottom: '1px solid var(--line)' }}>
+                        <td style={{ padding: '8px', fontWeight: 500 }}>{g.group}</td>
+                        <td style={{ padding: '8px' }}>{g.total}</td>
+                        <td style={{ padding: '8px' }}>{g.selected}</td>
+                        <td style={{ padding: '8px' }}>{g.rate === null ? '—' : `${(g.rate * 100).toFixed(1)}%`}</td>
+                        <td style={{ padding: '8px' }}>{g.impactRatio === null ? '—' : g.impactRatio.toFixed(2)}</td>
+                        <td style={{ padding: '8px' }}>{avgFit ? `${Number(avgFit).toFixed(1)}%` : '—'}</td>
+                        <td style={{ padding: '8px' }}><Tag color={STATUS_COLOR[g.status]}>{g.status}</Tag></td>
                       </tr>
                     );
                   })}
@@ -116,7 +133,7 @@ export default function AnalyticsPage() {
               </table>
             ) : (
               <div style={{ padding: '12px', fontSize: '0.85rem', color: 'var(--fg-3)' }}>
-                No demographic disparity detected. As more candidates complete assessments, language parity metrics will appear here.
+                No fairness data yet. As candidates apply and progress, selection rates per language will appear here.
               </div>
             )}
           </Panel>

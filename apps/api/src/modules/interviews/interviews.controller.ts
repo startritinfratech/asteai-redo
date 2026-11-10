@@ -1,5 +1,5 @@
 import {
-  Body, Controller, Get, Param, Post, Query, Res, UseGuards, HttpCode,
+  Body, Controller, Get, Param, ParseUUIDPipe, Post, Query, Res, UseGuards, HttpCode,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
@@ -9,6 +9,7 @@ import type { User } from '@asteai/types';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { RolesGuard } from '../../common/guards/roles.guard';
+import { paginate } from '../../common/utils/pagination';
 import { AiResultsKeyGuard } from '../../common/guards/ai-results-key.guard';
 import { CertificatesService } from '../certificates/certificates.service';
 import { catalogue } from './catalogue';
@@ -46,7 +47,7 @@ export class InterviewsController {
     return this.svc.detail(user, id);
   }
 
-  /** A fresh AI token to reconnect to an interview that has not finished. */
+  /** A fresh AI token to reconnect to an interview that has not finished. Owner only. */
   @Post('mock/:id/session')
   session(@CurrentUser() user: User, @Param('id') id: string) {
     return this.svc.session(user, id);
@@ -79,17 +80,23 @@ export class InterviewsController {
   @Roles('Admin')
   adminList(
     @Query('status') status?: string,
-    @Query('limit') limit?: number,
-    @Query('offset') offset?: number,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+    @Query('page') page?: string,
   ) {
     const allowed = ['in_progress', 'completed', 'abandoned'];
-    return this.svc.adminList({ status: allowed.includes(status ?? '') ? status : undefined, limit, offset });
+    // `limit` is the page size; an explicit `offset` wins over `page`.
+    const p = paginate(page, limit, 50, 100);
+    const skip = offset === undefined ? p.offset : Math.max(0, Math.floor(Number(offset)) || 0);
+    return this.svc.adminList({
+      status: allowed.includes(status ?? '') ? status : undefined, limit: p.pageSize, offset: skip,
+    });
   }
 
   /** Rebuilds the certificate content (e.g. after the AI service was down). */
   @Post('admin/mock/:id/certificate')
   @Roles('Admin')
-  async regenerate(@Param('id') id: string) {
+  async regenerate(@Param('id', new ParseUUIDPipe()) id: string) {
     const { content } = await this.certificates.ensureContent(id, true);
     return { certificateContent: content };
   }

@@ -1,27 +1,33 @@
 import {
-  Body, Controller, HttpCode, HttpStatus, Post, Req, UseGuards,
+  Body, Controller, HttpCode, HttpStatus, Post, Req, UnauthorizedException, UseGuards,
 } from '@nestjs/common';
 import { ApiBody, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { AuthGuard } from '@nestjs/passport';
 import { Request } from 'express';
 import { Throttle } from '@nestjs/throttler';
-import { AuthService } from './auth.service';
+import { AuthService, sessionMetaFrom } from './auth.service';
+import { TwoFactorService } from './two-factor.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
+import { LogoutDto } from './dto/logout.dto';
+import { OptionalJwtGuard } from './optional-jwt.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { User } from '@asteai/types';
 
 @ApiTags('auth')
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly auth: AuthService) {}
+  constructor(
+    private readonly auth: AuthService,
+    private readonly twoFactor: TwoFactorService,
+  ) {}
 
   @Post('register')
   @ApiOperation({ summary: 'Register a new user account' })
   @Throttle({ short: { ttl: 60_000, limit: 5 } })
-  async register(@Body() dto: RegisterDto) {
-    return this.auth.register(dto);
+  async register(@Body() dto: RegisterDto, @Req() req: Request) {
+    return this.auth.register(dto, sessionMetaFrom(req));
   }
 
   @Post('login')
@@ -29,9 +35,12 @@ export class AuthController {
   @UseGuards(AuthGuard('local'))
   @ApiBody({ type: LoginDto })
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Login with email + password' })
+  @ApiOperation({
+    summary: 'Login with email + password',
+    description: 'Returns tokens, or `{ twoFactorRequired: true, challenge }` when two-factor authentication is on (then POST /auth/login/2fa).',
+  })
   async login(@Req() req: Request & { user: User }) {
-    return this.auth.login(req.user);
+    return this.twoFactor.startLogin(req.user, sessionMetaFrom(req));
   }
 
   @Post('refresh')
@@ -41,11 +50,21 @@ export class AuthController {
     return this.auth.refreshTokens(body.userId, body.refreshToken);
   }
 
+  /**
+   * With a valid bearer token: revokes all of the user's refresh tokens. Without one
+   * (the access token expired), `{ userId, refreshToken }` revokes that refresh token.
+   */
   @Post('logout')
-  @UseGuards(AuthGuard('jwt'))
+  @UseGuards(OptionalJwtGuard)
+  @Throttle({ short: { ttl: 60_000, limit: 20 } })
   @HttpCode(HttpStatus.NO_CONTENT)
-  @ApiOperation({ summary: 'Revoke all refresh tokens for the current user' })
-  async logout(@CurrentUser() user: User) {
-    await this.auth.logout(user.id);
+  @ApiOperation({ summary: 'Revoke the refresh tokens of the current user, or the one given' })
+  async logout(@CurrentUser() user: User | null, @Body() body: LogoutDto) {
+    if (user) {
+      await this.auth.logout(user.id);
+      return;
+    }
+    if (!body.userId || !body.refreshToken) throw new UnauthorizedException();
+    await this.auth.revokeRefreshToken(body.userId, body.refreshToken);
   }
 }

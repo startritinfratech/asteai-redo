@@ -2,11 +2,13 @@ import 'reflect-metadata';
 import { Logger, ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
+import type { NestExpressApplication } from '@nestjs/platform-express';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import * as compression from 'compression';
 import * as cookieParser from 'cookie-parser';
 import helmet from 'helmet';
 import { AppModule } from './app.module';
+import { ChatsIoAdapter } from './modules/chats/chats-io.adapter';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { ResponseTransformInterceptor } from './common/interceptors/response-transform.interceptor';
 
@@ -29,6 +31,13 @@ async function bootstrap() {
     .map((o) => o.trim())
     .filter(Boolean);
 
+  // ── Proxies ──────────────────────────────────────────────────────────────
+  // TRUST_PROXY = number of proxy hops in front of the API (e.g. 1 behind an ALB), so
+  // req.ip (rate limits, contract signature IPs) is the client, not the load balancer.
+  // Unset / 0: no proxy is trusted and X-Forwarded-For is ignored.
+  const trustProxy = Number(config.get<string>('TRUST_PROXY') || 0);
+  if (trustProxy > 0) (app as NestExpressApplication).set('trust proxy', trustProxy);
+
   // ── Security middleware ──────────────────────────────────────────────────
   app.use(helmet());
   app.use(compression());
@@ -38,6 +47,8 @@ async function bootstrap() {
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   });
+  // Realtime chat (socket.io, namespace /chats) uses the same allowed origins.
+  app.useWebSocketAdapter(new ChatsIoAdapter(app, origins));
 
   // ── Global pipes / filters / interceptors ────────────────────────────────
   app.useGlobalPipes(
