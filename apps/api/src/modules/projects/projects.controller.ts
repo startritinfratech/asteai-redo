@@ -8,9 +8,7 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { paginate } from '../../common/utils/pagination';
-import {
-  CreateDisputeDto, CreateProjectDto, ResolveDisputeDto, UpdateProjectStageDto,
-} from './dto/project.dto';
+import { CreateProjectDto, UpdateProjectStageDto } from './dto/project.dto';
 import { ProjectsService } from './projects.service';
 
 /** The 410 message for the retired PATCH /projects/:id/milestones/:milestoneId. */
@@ -28,27 +26,6 @@ export class ProjectsController {
   @Get('open')
   findOpen(@Query('page') page?: string, @Query('pageSize') pageSize?: string) {
     return this.svc.findOpen(paginate(page, pageSize));
-  }
-
-  @Get('services')
-  findServices() {
-    return this.svc.findServices();
-  }
-
-  @Get('disputes')
-  findDisputes(@CurrentUser() user: User) {
-    return this.svc.findDisputes(user);
-  }
-
-  @Post('disputes')
-  createDispute(@Body() body: CreateDisputeDto, @CurrentUser() user: User) {
-    return this.svc.createDispute(body, user);
-  }
-
-  @Patch('disputes/:id/resolve')
-  @Roles('Admin')
-  resolveDispute(@Param('id') id: string, @Body() body: ResolveDisputeDto) {
-    return this.svc.resolveDispute(id, body.resolution);
   }
 
   @Get('mine')

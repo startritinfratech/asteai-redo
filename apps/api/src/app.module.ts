@@ -29,6 +29,11 @@ import { EmailModule } from './modules/email/email.module';
 import { ChatsModule } from './modules/chats/chats.module';
 import { ContractsModule } from './modules/contracts/contracts.module';
 import { ProfilesModule } from './modules/profiles/profiles.module';
+import { PaymentsModule } from './modules/payments/payments.module';
+import { InvoicesModule } from './modules/invoices/invoices.module';
+import { PayoutsModule } from './modules/payouts/payouts.module';
+import { DisputesModule } from './modules/disputes/disputes.module';
+import { GigsModule } from './modules/gigs/gigs.module';
 
 @Module({
   imports: [
@@ -64,6 +69,11 @@ import { ProfilesModule } from './modules/profiles/profiles.module';
     ChatsModule,
     ContractsModule,
     ProfilesModule,
+    PaymentsModule,
+    InvoicesModule,
+    PayoutsModule,
+    DisputesModule,
+    GigsModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },

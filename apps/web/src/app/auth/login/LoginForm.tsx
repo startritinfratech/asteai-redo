@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useId, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useId, useRef, useState, type FormEvent } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ApiError } from '@/lib/api';
 import { ROLE_HOME } from '@/lib/routes';
@@ -11,22 +11,36 @@ import { EMAIL_RE, PasswordInput, Spinner, authErrorMessage } from '../_componen
 import { TwoFactorStep } from '../2fa/TwoFactorStep';
 import step from '../2fa/step.module.css';
 import styles from '../auth.module.css';
+import type { DemoAccount } from './demoAccounts';
 
 /** Only same-site paths under /platform are honoured as a post-login destination. */
 function safeNext(next: string | null): string | null {
   return next && next.startsWith('/platform') && !next.startsWith('//') ? next : null;
 }
 
-/** Seeded demo accounts. Shown in development, or when NEXT_PUBLIC_DEMO_LOGIN=true. */
-const SHOW_DEMO = process.env.NODE_ENV !== 'production' || process.env.NEXT_PUBLIC_DEMO_LOGIN === 'true';
-const DEMO_PASSWORD = 'Password123!';
-const DEMO_ACCOUNTS = [
-  { label: 'Admin', email: 'ops@asteai.com' },
-  { label: 'Employer', email: 'priya@meridianhospitals.in' },
-  { label: 'Candidate', email: 'rahul.g@gmail.com' },
-  { label: 'Freelancer', email: 'aarav@dev.in' },
-  { label: 'Buyer', email: 'nikhil@novastack.io' },
-] as const;
+interface DemoLogins { password: string; accounts: readonly DemoAccount[] }
+
+/**
+ * Seeded demo accounts, shown in development or when NEXT_PUBLIC_DEMO_LOGIN=true. They live
+ * in ./demoAccounts and are loaded with import() behind an inline build-time condition (not
+ * a variable: webpack can only drop a dead branch it can evaluate), so a production build
+ * without the flag contains neither the demo password nor the seeded addresses.
+ * next.config.js always inlines NEXT_PUBLIC_DEMO_LOGIN so the condition is constant.
+ */
+function useDemoLogins(): DemoLogins | null {
+  const [demo, setDemo] = useState<DemoLogins | null>(null);
+  useEffect(() => {
+    if (process.env.NODE_ENV !== 'production' || process.env.NEXT_PUBLIC_DEMO_LOGIN === 'true') {
+      let live = true;
+      void import('./demoAccounts').then((m) => {
+        if (live) setDemo({ password: m.DEMO_PASSWORD, accounts: m.DEMO_ACCOUNTS });
+      });
+      return () => { live = false; };
+    }
+    return undefined;
+  }, []);
+  return demo;
+}
 
 type Errors = { email?: string; password?: string };
 
@@ -37,6 +51,7 @@ export function LoginForm() {
   const login = useAuthStore((s) => s.login);
   const hydrated = useAuthHydrated();
   const id = useId();
+  const demo = useDemoLogins();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -109,11 +124,11 @@ export function LoginForm() {
         </p>
       )}
 
-      {SHOW_DEMO && (
+      {demo && (
         <div className={styles.demo}>
-          <span className={styles.demoLabel} id={`${id}-demo`}>Demo accounts · password {DEMO_PASSWORD}</span>
+          <span className={styles.demoLabel} id={`${id}-demo`}>Demo accounts · password {demo.password}</span>
           <div className={styles.demoPills} role="group" aria-labelledby={`${id}-demo`}>
-            {DEMO_ACCOUNTS.map((acc) => (
+            {demo.accounts.map((acc) => (
               <button
                 key={acc.email}
                 type="button"
@@ -121,7 +136,8 @@ export function LoginForm() {
                 aria-pressed={email === acc.email}
                 onClick={() => {
                   setEmail(acc.email);
-                  setPassword(DEMO_PASSWORD);
+                  setPassword(demo.password);
+
                   setErrors({});
                   setFormError('');
                 }}

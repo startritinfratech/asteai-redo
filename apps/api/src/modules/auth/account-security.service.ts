@@ -90,15 +90,18 @@ export class AccountSecurityService {
       throw new ForbiddenException('Your current password is incorrect');
     }
     const passwordHash = await bcrypt.hash(newPassword, PASSWORD_ROUNDS);
-    await withTransaction(this.db, async (client) => {
-      await client.query(
-        `UPDATE user_accounts SET password_hash = $2, password_changed_at = NOW(), updated_at = NOW() WHERE id = $1`,
+    const changedAt = await withTransaction(this.db, async (client) => {
+      const { rows: changed } = await client.query<{ password_changed_at: Date | null }>(
+        `UPDATE user_accounts SET password_hash = $2, password_changed_at = NOW(), updated_at = NOW() WHERE id = $1
+         RETURNING password_changed_at`,
         [user.id, passwordHash],
       );
       await this.revokeAllSessions(client, user.id);
       await this.email.enqueue('password-changed', user.email, { firstName: user.firstName, reason: 'changed' }, { client, userId: user.id });
+      return changed[0]?.password_changed_at ?? null;
     });
-    return this.auth.login(user, meta);
+    // This device's new access token must postdate the change it just made.
+    return this.auth.login(user, meta, changedAt);
   }
 
   // ── Email verification ───────────────────────────────────────────────────────

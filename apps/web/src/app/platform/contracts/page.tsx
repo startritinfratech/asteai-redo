@@ -74,7 +74,7 @@ export default function ContractsPage() {
             >
               <Panel className={styles.stack}>
                 <div className={styles.between}>
-                  <span className={styles.h2}>{c.projectTitle}</span>
+                  <span className={styles.h2}>{c.title}</span>
                   <Tag color={statusColor(c.status)}>{STATUS_LABEL[c.status] ?? c.status}</Tag>
                 </div>
                 <div className={styles.between}>

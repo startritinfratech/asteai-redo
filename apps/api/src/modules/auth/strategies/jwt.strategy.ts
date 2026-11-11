@@ -6,12 +6,17 @@ import { Pool } from 'pg';
 import type { User, UserRole } from '@asteai/types';
 import { DB_POOL } from '../../../database/database.module';
 import { mapUserRow, USER_COLUMNS, UserRow } from '../../users/user.mapper';
-import { ACCOUNT_ACTIVE_SQL, NOT_BLOCKED_SQL } from '../account-status';
+import { ACCOUNT_ACTIVE_SQL, NOT_BLOCKED_SQL, tokenIssueParams, tokenNotRevokedSql } from '../account-status';
 
 export interface JwtPayload {
   sub: string;
   role: UserRole;
   tenantId: string | null;
+  /**
+   * Issue time in milliseconds (the standard `iat` is whole seconds), so a password change
+   * revokes a token minted earlier in the same second. Absent on older tokens.
+   */
+  iatMs?: number;
 }
 
 /**
@@ -41,9 +46,10 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
     const { rows } = await this.db.query<UserRow>(
       `SELECT ${USER_COLUMNS} FROM user_accounts
         WHERE id = $1 AND ${ACCOUNT_ACTIVE_SQL} AND ${NOT_BLOCKED_SQL}
-          AND (password_changed_at IS NULL OR date_trunc('second', password_changed_at) <= to_timestamp($2))`,
-      [payload.sub, payload.iat ?? 0],
+          AND ${tokenNotRevokedSql(2, 3)}`,
+      [payload.sub, ...tokenIssueParams(payload)],
     );
+
     if (!rows.length) throw new UnauthorizedException();
     return mapUserRow(rows[0]);
   }

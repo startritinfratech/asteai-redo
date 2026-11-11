@@ -64,7 +64,16 @@ describe('validateEnv', () => {
   it('requires TOTP_ENCRYPTION_KEY in production', () => {
     assert.throws(() => validateEnv({ ...base, NODE_ENV: 'production' }), /TOTP_ENCRYPTION_KEY is required in production/);
     assert.throws(() => validateEnv({ ...base, NODE_ENV: 'production', TOTP_ENCRYPTION_KEY: '' }), /TOTP_ENCRYPTION_KEY/);
-    assert.doesNotThrow(() => validateEnv({ ...base, NODE_ENV: 'production', TOTP_ENCRYPTION_KEY: 'k'.repeat(32) }));
+    assert.doesNotThrow(() => validateEnv({
+      ...base, NODE_ENV: 'production', TOTP_ENCRYPTION_KEY: 'k'.repeat(32), PAYOUT_ENCRYPTION_KEY: 'p'.repeat(32),
+    }));
+  });
+
+  it('requires a distinct PAYOUT_ENCRYPTION_KEY in production', () => {
+    const prod = { ...base, NODE_ENV: 'production', TOTP_ENCRYPTION_KEY: 'k'.repeat(32) };
+    assert.throws(() => validateEnv(prod), /PAYOUT_ENCRYPTION_KEY is required in production/);
+    assert.throws(() => validateEnv({ ...prod, PAYOUT_ENCRYPTION_KEY: 'k'.repeat(32) }), /PAYOUT_ENCRYPTION_KEY must differ/);
+    assert.throws(() => validateEnv({ ...base, PAYOUT_ENCRYPTION_KEY: 'short' }), /at least 32/);
   });
 
   it('rejects a short TOTP_ENCRYPTION_KEY', () => {
@@ -81,5 +90,14 @@ describe('validateEnv', () => {
     assert.doesNotThrow(() => validateEnv({ ...base, EMAIL_TRANSPORT: 'ses', EMAIL_FROM: 'AsteAI <no-reply@asteai.com>', AWS_REGION: 'ap-south-1' }));
     assert.throws(() => validateEnv({ ...base, EMAIL_TRANSPORT: 'smtp' }), /EMAIL_TRANSPORT/);
   });
-});
 
+  it('checks the Razorpay settings', () => {
+    assert.doesNotThrow(() => validateEnv({ ...base }));
+    assert.throws(() => validateEnv({ ...base, RAZORPAY_KEY_ID: 'key_123' }), /rzp_test_ or rzp_live_/);
+    assert.throws(() => validateEnv({ ...base, RAZORPAY_KEY_ID: 'rzp_test_abc' }), /RAZORPAY_KEY_SECRET is required/);
+    assert.doesNotThrow(() => validateEnv({ ...base, RAZORPAY_KEY_ID: 'rzp_test_abc', RAZORPAY_KEY_SECRET: 'secret-123456' }));
+    assert.throws(() => validateEnv({
+      ...base, RAZORPAY_KEY_ID: 'rzp_test_abc', RAZORPAY_KEY_SECRET: 'secret-123456', RAZORPAY_WEBHOOK_SECRET: 'secret-123456',
+    }), /must differ/);
+  });
+});

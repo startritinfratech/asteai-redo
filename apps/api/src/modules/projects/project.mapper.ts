@@ -27,7 +27,7 @@ export function mapProjectRow(row: ProjectRow): ProjectResponse {
   return {
     id: row.id,
     buyerId: row.buyer_id,
-    tenantId: row.tenant_id ?? '',
+    tenantId: row.tenant_id, // null for a buyer's own (non-tenant) project
     title: row.title,
     domain: row.domain ?? '',
     budget: row.budget === null ? 0 : Number(row.budget), // NUMERIC arrives as a string

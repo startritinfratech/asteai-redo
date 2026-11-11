@@ -4,7 +4,7 @@ import {
   MaxLength, Min, MinLength, ValidateNested,
 } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
-import { CONTRACT_STATUSES, ENGAGEMENT_MODELS, type ContractStatus, type EngagementModel } from '../contract.types';
+import { CONTRACT_STATUSES, ENGAGEMENT_MODELS, SUPPORTED_CURRENCIES, type ContractStatus, type EngagementModel } from '../contract.types';
 
 export class ContractMilestoneInputDto {
   @ApiProperty() @IsString() @MinLength(1) @MaxLength(200) title: string;
@@ -21,7 +21,8 @@ export class CreateContractDto {
   @ApiProperty({ type: Object }) @IsObject() paymentTerms: Record<string, unknown>;
 
   @ApiProperty({ required: false, default: 'INR' })
-  @IsOptional() @Matches(/^[A-Z]{3}$/, { message: 'currency must be an ISO 4217 code' }) currency?: string;
+  @IsOptional() @IsIn(SUPPORTED_CURRENCIES as readonly string[], { message: `currency must be one of: ${SUPPORTED_CURRENCIES.join(', ')}` })
+  currency?: string;
 
   @ApiProperty({ type: [ContractMilestoneInputDto] })
   @IsArray() @ArrayMinSize(1) @ArrayMaxSize(50) @ValidateNested({ each: true }) @Type(() => ContractMilestoneInputDto)
@@ -55,7 +56,8 @@ export class MilestoneNoteDto {
   @ApiProperty() @IsString() @MinLength(1) @MaxLength(4000) note: string;
 }
 
-export class CapturePaymentDto {
-  /** The provider's payment reference (stand-in: the reference of the manually verified payment). */
-  @ApiProperty() @IsString() @MinLength(3) @MaxLength(128) providerPaymentId: string;
+/** POST /contracts/:id/refund (Admin). Without `amount`, everything still due is refunded. */
+export class IssueRefundDto {
+  @ApiProperty() @IsString() @MinLength(3) @MaxLength(2000) reason: string;
+  @ApiProperty({ required: false }) @IsOptional() @IsNumber({ maxDecimalPlaces: 2 }) @Min(0.01) @Max(1e10) amount?: number;
 }

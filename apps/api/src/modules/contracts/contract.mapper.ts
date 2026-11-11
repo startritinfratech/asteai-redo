@@ -7,8 +7,10 @@ type Ts = Date | string | null;
 
 export interface ContractRow {
   id: string;
-  project_id: string;
-  proposal_id: string;
+  project_id: string | null;
+  proposal_id: string | null;
+  gig_order_id?: string | null;
+  title?: string | null;
   tenant_id: string | null;
   buyer_id: string;
   expert_id: string;
@@ -27,11 +29,13 @@ export interface ContractRow {
   expert_signature: string | null;
   cancelled_by: string | null;
   cancel_reason: string | null;
+  refund_due: Num;
   source: string;
   created_at: Ts;
   updated_at: Ts;
   // joined
-  project_title?: string;
+  project_title?: string | null;
+  display_title?: string | null;
   buyer_name?: string;
   expert_name?: string;
 }
@@ -99,9 +103,11 @@ export function mapMilestoneRow(row: MilestoneRow): ContractMilestone {
 export function mapContractSummary(row: ContractRow): ContractSummary {
   return {
     id: row.id,
-    projectId: row.project_id,
-    projectTitle: row.project_title ?? '',
-    proposalId: row.proposal_id,
+    projectId: row.project_id ?? null,
+    projectTitle: row.project_title ?? null,
+    title: row.display_title ?? row.title ?? row.project_title ?? row.id,
+    proposalId: row.proposal_id ?? null,
+    gigOrderId: row.gig_order_id ?? null,
     buyerId: row.buyer_id,
     buyerName: row.buyer_name ?? '',
     expertId: row.expert_id,
@@ -129,6 +135,7 @@ export function mapContractRow(row: ContractRow, milestones: MilestoneRow[]): Co
     expertSignature: row.expert_signature,
     cancelledBy: row.cancelled_by,
     cancelReason: row.cancel_reason,
+    refundDue: Number(row.refund_due ?? 0),
     source: row.source,
     milestones: milestones.map(mapMilestoneRow),
   };

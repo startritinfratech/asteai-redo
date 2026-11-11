@@ -3,6 +3,10 @@
 // Types, the const arrays the API validates against, and the pure payment-terms rules.
 // Re-exported from ./index, so import it from '@asteai/types'.
 
+/** Contract currencies. The wallet, payouts and invoices are INR-only; extend them together before adding one. */
+export const SUPPORTED_CURRENCIES = ['INR'] as const;
+export type SupportedCurrency = typeof SUPPORTED_CURRENCIES[number];
+
 export const ENGAGEMENT_MODELS = ['fixed', 'hourly', 'daily', 'sprint'] as const;
 export type EngagementModel = typeof ENGAGEMENT_MODELS[number];
 
@@ -100,9 +104,14 @@ export interface ContractMilestone {
 /** A contract as listed by GET /contracts. */
 export interface ContractSummary {
   id: string;
-  projectId: string;
-  projectTitle: string;
-  proposalId: string;
+  /** Null for a gig contract (source 'gig'): it has no project or proposal. */
+  projectId: string | null;
+  projectTitle: string | null;
+  /** What to call the contract: the project title, or the gig title for a gig contract. */
+  title: string;
+  proposalId: string | null;
+  /** The gig order this contract fulfils, when source is 'gig'. */
+  gigOrderId: string | null;
   buyerId: string;
   buyerName: string;
   expertId: string;
@@ -128,7 +137,9 @@ export interface Contract extends ContractSummary {
   expertSignature: string | null;
   cancelledBy: string | null;
   cancelReason: string | null;
-  /** 'app' for contracts created here, 'legacy_project' for ones copied from projects.milestones. */
+  /** Escrow still held when the contract was cancelled (escrow funded − released), owed back to the buyer. */
+  refundDue: number;
+  /** 'app' for contracts created here, 'legacy_project' for ones copied from projects.milestones, 'gig' for a pre-packaged service order. */
   source: string;
   milestones: ContractMilestone[];
 }
@@ -144,15 +155,7 @@ export interface CreateContractInput {
   ndaText?: string;
 }
 
-/** POST /contracts/:id/milestones/:mid/fund. The milestone is NOT funded until the provider confirms. */
-export interface FundMilestoneResult {
-  paymentId: string;
-  amount: number;
-  provider: string;
-  status: EscrowPaymentStatus;
-}
-
-/** POST /contracts/admin/payments/:paymentId/capture. */
+/** What ContractsService.markPaymentCaptured returns (called by the Razorpay verify and webhook paths). */
 export interface CapturePaymentResult {
   paymentId: string;
   milestoneId: string;

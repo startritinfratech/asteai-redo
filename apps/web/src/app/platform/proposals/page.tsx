@@ -2,24 +2,12 @@
 
 import Link from 'next/link';
 import useSWR from 'swr';
+import type { Proposal } from '@asteai/types';
 import { fetcher } from '@/lib/api';
 import { Empty, PageHeader, Panel, Tag } from '@/components/ui';
 
-interface ProposalRecord {
-  id: string;
-  project_id: string;
-  project_title?: string;
-  price: string;
-  days: number;
-  note: string;
-  status: string;
-  created_at: string;
-  /** The contract the buyer created for this proposal, once awarded. */
-  contract_id: string | null;
-}
-
 export default function ProposalsPage() {
-  const { data: proposals, error, isLoading } = useSWR<ProposalRecord[]>('/proposals/mine', fetcher);
+  const { data: proposals, error, isLoading } = useSWR<Proposal[]>('/proposals/mine', fetcher);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
@@ -42,18 +30,18 @@ export default function ProposalsPage() {
           return (
             <Panel key={p.id} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontWeight: 600, fontSize: '0.95rem' }}>{p.project_title || p.project_id}</span>
-                <Tag color={isAwarded ? 'mint' : p.status === 'Rejected' ? 'rose' : 'amber'}>
+                <span style={{ fontWeight: 600, fontSize: '0.95rem' }}>{p.projectTitle || p.projectId}</span>
+                <Tag color={isAwarded ? 'mint' : p.status === 'Pending' ? 'amber' : 'rose'}>
                   {p.status}
                 </Tag>
               </div>
 
               <div style={{ fontSize: '0.8rem', color: 'var(--fg-3)', fontFamily: 'var(--font-mono)' }}>
-                Proposal ID: {p.id} · Submitted {new Date(p.created_at).toLocaleDateString()}
+                Proposal ID: {p.id} · Submitted {new Date(p.createdAt).toLocaleDateString()}
               </div>
 
               <div style={{ display: 'flex', gap: '14px', fontSize: '0.85rem', color: 'var(--fg-2)', background: 'var(--bg-2)', padding: '8px', borderRadius: '4px' }}>
-                <div>Bid: <b>₹{Number(p.price).toLocaleString('en-IN')}</b></div>
+                <div>Bid: <b>₹{p.price.toLocaleString('en-IN')}</b></div>
                 <div>Timeline: <b>{p.days} Days</b></div>
               </div>
 
@@ -61,9 +49,10 @@ export default function ProposalsPage() {
                 &ldquo;{p.note}&rdquo;
               </div>
 
-              {isAwarded && (p.contract_id ? (
+              {isAwarded && (p.contractId ? (
                 <Link
-                  href={`/platform/contracts/${encodeURIComponent(p.contract_id)}`}
+                  href={`/platform/contracts/${encodeURIComponent(p.contractId)}`}
+
                   style={{ fontSize: '0.85rem', color: 'var(--blue)' }}
                 >
                   View contract →

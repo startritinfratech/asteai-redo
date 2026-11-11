@@ -11,6 +11,9 @@ export type EmailTokenPurpose = 'verify_email' | 'reset_password';
 
 export const RESET_TOKEN_TTL_MS = 30 * 60_000;
 export const VERIFY_TOKEN_TTL_MS = 24 * 60 * 60_000;
+/** A team invite is a 'reset_password' token that sets the first password; it lasts a week. */
+export const TEAM_INVITE_TOKEN_TTL_MS = 7 * 24 * 60 * 60_000;
+
 
 type Queryable = Pool | PoolClient;
 

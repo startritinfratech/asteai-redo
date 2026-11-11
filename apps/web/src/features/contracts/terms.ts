@@ -118,7 +118,8 @@ export function milestoneUiActions(
   if (side === 'expert') return m.status === 'funded' || m.status === 'revision_requested' ? ['submit'] : [];
   if (side !== 'buyer') return [];
   switch (m.status) {
-    case 'pending': return m.paymentPending ? [] : ['fund'];
+    // With a payment already open, 'fund' reopens its checkout (the API reuses the order).
+    case 'pending': return ['fund'];
     case 'submitted': return ['accept', 'request_revision'];
     case 'accepted': return ['release'];
     default: return [];

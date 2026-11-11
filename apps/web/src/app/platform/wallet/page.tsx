@@ -1,83 +1,120 @@
 'use client';
 
-import useSWR from 'swr';
-import type { LedgerEntry, WalletSummary } from '@asteai/types';
+import Link from 'next/link';
+import useSWR, { useSWRConfig } from 'swr';
+import type { LedgerEntry } from '@asteai/types';
+import { useAuthStore } from '@/store/auth';
 import { fetcher } from '@/lib/api';
-import { Button, Empty, KPI, PageHeader, Panel, Tag } from '@/components/ui';
+import { Empty, KPI, PageHeader, Panel, Tag } from '@/components/ui';
+import {
+  formatDate, formatInr, LEDGER_ENTRIES_KEY, PAYOUT_ACCOUNT_KEY, PayoutAccountForm, PAYOUTS_KEY, PayoutsPanel, WALLET_KEY,
+  type PayoutAccount, type PayoutOverview, type WalletBalances,
+} from '@/features/billing';
+import styles from '@/features/billing/Billing.module.css';
 
+/**
+ * Wallet. Experts: earnings, escrow held for them, payout account and payout requests.
+ * Buyers: money paid into escrow, released, refunded and still held. Every role: the
+ * ledger rows that touch them.
+ */
 export default function WalletPage() {
-  const { data: wallet } = useSWR<WalletSummary>('/ledger/wallet', fetcher);
-  const { data: entries } = useSWR<LedgerEntry[]>('/ledger/entries', fetcher);
+  const role = useAuthStore((s) => s.user?.role);
+  const isExpert = role === 'Freelancer';
+  const { data: wallet, error } = useSWR<WalletBalances>(WALLET_KEY, fetcher);
+  const { data: entries } = useSWR<LedgerEntry[]>(LEDGER_ENTRIES_KEY, fetcher);
+  const { data: account, mutate: mutateAccount } = useSWR<PayoutAccount | null>(isExpert ? PAYOUT_ACCOUNT_KEY : null, fetcher);
+  const { data: overview } = useSWR<PayoutOverview>(isExpert ? PAYOUTS_KEY : null, fetcher);
+  const { mutate } = useSWRConfig();
 
-  const earnedNum = wallet?.earned ?? 0;
-  const feesNum = wallet?.fees ?? 0;
-  const pendingNum = wallet?.pending ?? 0;
-  const available = Math.max(0, earnedNum - feesNum);
+  const refresh = () => {
+    void mutate(WALLET_KEY);
+    void mutate(PAYOUTS_KEY);
+    void mutate(LEDGER_ENTRIES_KEY);
+  };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+    <div className={styles.page}>
       <PageHeader
         eyebrow="Finance & Payouts"
-        title="Wallet & Escrow"
-        sub="Your earnings, escrow held and platform fees, with the transaction ledger."
+        title="Wallet"
+        sub={isExpert
+          ? 'What you have earned, what buyers hold in escrow for you, and your payouts.'
+          : 'What you have paid into escrow, what has been released to experts, and refunds.'}
+        actions={<Link href="/platform/invoices">Invoices</Link>}
       />
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '14px' }}>
-        <KPI value={`₹${available.toLocaleString('en-IN')}`} label="Available Balance" />
-        <KPI value={`₹${pendingNum.toLocaleString('en-IN')}`} label="Escrow Held" />
-        <KPI value={`₹${earnedNum.toLocaleString('en-IN')}`} label="Total Gross Volume" />
-        <KPI value={`₹${feesNum.toLocaleString('en-IN')}`} label="Platform Fees (5%)" />
-      </div>
+      {error && <Empty message="Could not load your wallet." />}
 
-      <Panel style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-        <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 600 }}>Deposit / Add Wallet Funds</h3>
-        <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--fg-2)' }}>
-          Adding funds to your wallet needs payments, which are not available yet.
-        </p>
-
-        <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
-          <Button variant="mint" disabled>Add funds (coming soon)</Button>
-          <span style={{ fontSize: '0.85rem', color: 'var(--fg-3)' }}>
-            Top-ups arrive with payments — coming soon.
-          </span>
+      {wallet && isExpert && (
+        <div className={styles.kpis}>
+          <KPI value={formatInr(wallet.expert.available)} label="Available to withdraw" />
+          <KPI value={formatInr(wallet.expert.inEscrow)} label="In escrow for you" />
+          <KPI value={formatInr(wallet.expert.earned)} label="Released to you (lifetime)" />
+          <KPI value={formatInr(wallet.expert.paidOut)} label="Paid out" />
+          {wallet.expert.payoutsPending > 0 && <KPI value={formatInr(wallet.expert.payoutsPending)} label="Payouts in progress" />}
+          {wallet.expert.fees > 0 && <KPI value={formatInr(wallet.expert.fees)} label="Platform fees" />}
         </div>
-      </Panel>
+      )}
 
-      <Panel style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-        <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 600 }}>Recent Ledger Activity</h3>
-        {entries && entries.length > 0 ? (
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
-            <thead>
-              <tr style={{ borderBottom: '1px solid var(--line)', textAlign: 'left', color: 'var(--fg-3)' }}>
-                <th style={{ padding: '8px' }}>Date</th>
-                <th style={{ padding: '8px' }}>Reference</th>
-                <th style={{ padding: '8px' }}>Description</th>
-                <th style={{ padding: '8px' }}>Type</th>
-                <th style={{ padding: '8px', textAlign: 'right' }}>Amount</th>
-              </tr>
-            </thead>
-            <tbody>
-              {entries.map((tx) => {
-                const amt = tx.amount;
-                return (
-                  <tr key={tx.id} style={{ borderBottom: '1px solid var(--line)' }}>
-                    <td style={{ padding: '8px', color: 'var(--fg-3)' }}>{new Date(tx.t).toLocaleDateString()}</td>
-                    <td style={{ padding: '8px', fontFamily: 'var(--font-mono)' }}>{tx.id}</td>
-                    <td style={{ padding: '8px' }}>{tx.description}</td>
-                    <td style={{ padding: '8px' }}><Tag color={amt >= 0 ? 'mint' : 'grey'}>{tx.type}</Tag></td>
-                    <td style={{ padding: '8px', textAlign: 'right', fontWeight: 600, color: amt >= 0 ? 'var(--mint)' : 'var(--fg-1)' }}>
-                      ₹{Math.abs(amt).toLocaleString('en-IN')}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+      {wallet && !isExpert && (
+        <div className={styles.kpis}>
+          <KPI value={formatInr(wallet.buyer.inEscrow)} label="Held in escrow" />
+          <KPI value={formatInr(wallet.buyer.funded)} label="Paid into escrow" />
+          <KPI value={formatInr(wallet.buyer.released)} label="Released to experts" />
+          <KPI value={formatInr(wallet.buyer.refunded)} label="Refunded to you" />
+          {wallet.buyer.refundDue > 0 && <KPI value={formatInr(wallet.buyer.refundDue)} label="Refund due to you" />}
+        </div>
+      )}
+
+      {role === 'Admin' && (
+        <p className={styles.muted}>
+          Expert payout requests are handled in the <Link href="/platform/payouts">payout queue</Link>.
+        </p>
+      )}
+
+      {isExpert && (
+        <div className={styles.columns}>
+          <Panel className={styles.stack}>
+            <h3 className={styles.h2}>Payout account</h3>
+            {account === undefined ? (
+              <Empty message="Loading…" />
+            ) : (
+              <PayoutAccountForm account={account} onSaved={(a) => { void mutateAccount(a, { revalidate: false }); }} />
+            )}
+          </Panel>
+          <Panel className={styles.stack}>
+            <h3 className={styles.h2}>Request a payout</h3>
+            <PayoutsPanel overview={overview} account={account ?? null} onChanged={refresh} />
+          </Panel>
+        </div>
+      )}
+
+      <Panel className={styles.stack}>
+        <h3 className={styles.h2}>Ledger</h3>
+        {!entries ? (
+          <Empty message="Loading…" />
+        ) : entries.length === 0 ? (
+          <Empty message="No wallet transactions yet." />
         ) : (
-          <Empty message="No recent wallet transactions recorded." />
+          <ul className={styles.list}>
+            {entries.map((tx) => (
+              <li key={tx.id} className={styles.item}>
+                <div className={styles.itemMain}>
+                  <span className={styles.itemTitle}>{tx.description}</span>
+                  <div className={styles.row}>
+                    <Tag color={tx.amount >= 0 ? 'mint' : 'grey'}>{tx.type}</Tag>
+                    <span className={styles.muted}>{formatDate(tx.t)}</span>
+                    <span className={`${styles.muted} ${styles.mono}`}>{tx.id}</span>
+                  </div>
+                </div>
+                <span className={`${styles.amount} ${tx.amount >= 0 ? styles.credit : ''}`}>
+                  {tx.amount >= 0 ? '+' : '−'}{formatInr(Math.abs(tx.amount), tx.unit || 'INR')}
+                </span>
+              </li>
+            ))}
+          </ul>
         )}
       </Panel>
     </div>
   );
 }
-

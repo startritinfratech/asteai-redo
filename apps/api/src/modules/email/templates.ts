@@ -18,6 +18,12 @@ export interface TemplateData {
   'verify-email': { firstName: string; path: string };
   'password-changed': { firstName: string; reason: 'changed' | 'reset' };
   'two-factor-enabled': { firstName: string };
+  /** A tenant member added someone to the team; `path` is /auth/reset?token=… (sets the first password). */
+  'team-invite': { inviterName: string; tenantName: string; firstName: string; path: string };
+  /** Razorpay confirmed the buyer's escrow payment for a milestone; `amount` is formatted. */
+  'payment-received': { firstName: string; amount: string; contractId: string; milestoneTitle: string; path: string };
+  /** Razorpay processed a refund of cancelled-contract escrow to the buyer; `amount` is formatted. */
+  'refund-issued': { firstName: string; amount: string; contractId: string; path: string };
   /** An admin's decision on a submitted expert profile; `note` is the admin's note to the expert. */
   'expert-profile-decision': {
     firstName: string;
@@ -25,6 +31,37 @@ export interface TemplateData {
     note: string | null;
     path: '/platform/profile';
   };
+  /** An admin recorded a manual payout transfer; `amount` is formatted, `reference` the bank UTR. */
+  'payout-paid': { firstName: string; amount: string; reference: string; path: '/platform/wallet' };
+  /** An admin rejected a payout request; `note` is the admin's reason. */
+  'payout-rejected': { firstName: string; amount: string; note: string; path: '/platform/wallet' };
+  /** A captured escrow payment produced an invoice (sent to the buyer). */
+  'invoice-issued': {
+    firstName: string;
+    invoiceId: string;
+    amount: string;
+    projectTitle: string;
+    milestoneTitle: string;
+    path: '/platform/invoices';
+  };
+  /** The other party of a contract raised a dispute; `respondBy` is a formatted date-time. */
+  'dispute-opened': {
+    firstName: string;
+    raisedByName: string;
+    contractId: string;
+    milestoneTitle: string | null;
+    reason: string;
+    respondBy: string;
+    path: string;
+  };
+  /** An admin's decision on a submitted service listing; `note` is the admin's note to the expert. */
+  'service-decision': { firstName: string; decision: 'published' | 'rejected'; title: string; note: string | null; path: '/platform/my-services' };
+  /** A delivered gig order will be accepted automatically in `daysLeft` days unless the buyer acts. */
+  'gig-delivery-reminder': { firstName: string; serviceTitle: string; daysLeft: number; path: string };
+  /** A delivered gig order was accepted automatically and the payment released (sent to both parties). */
+  'gig-auto-accepted': { firstName: string; serviceTitle: string; audience: 'buyer' | 'expert'; path: string };
+  /** An admin resolved a dispute; `outcome` is a sentence describing what happened to the money. */
+  'dispute-resolved': { firstName: string; disputeId: string; contractId: string; outcome: string; note: string; path: string };
 }
 
 export type TemplateName = keyof TemplateData;
@@ -166,7 +203,40 @@ const TEMPLATES: { [K in TemplateName]: Renderer<TemplateData[K]> } = {
     { path: '/platform/security', label: 'Review security settings' },
   ),
 
+  'team-invite': ({ inviterName, tenantName, firstName, path }, baseUrl) => notice(
+    `You've been invited to ${tenantName || 'a team'} on AsteAI`,
+    firstName,
+    [
+      `${inviterName || 'A colleague'} added you to ${tenantName ? `the ${tenantName}` : 'their'} team on AsteAI. Choose a password to activate your account and sign in.`,
+      'The link works once and expires in 7 days. If you weren’t expecting this, you can ignore this email.',
+    ],
+    baseUrl,
+    { path, label: 'Set your password' },
+  ),
+
+  'payment-received': ({ firstName, amount, contractId, milestoneTitle, path }, baseUrl) => notice(
+    `Payment of ${amount} received`,
+    firstName,
+    [
+      `We received your payment of ${amount} for milestone "${milestoneTitle}" on contract ${contractId}. It is held in escrow until you release it to the expert.`,
+    ],
+    baseUrl,
+    { path, label: 'Open the contract' },
+  ),
+
+  'refund-issued': ({ firstName, amount, contractId, path }, baseUrl) => notice(
+    `Your refund of ${amount} has been processed`,
+    firstName,
+    [
+      `We have refunded ${amount} from escrow on contract ${contractId} to your original payment method.`,
+      'Refunds usually reach your account within 5–7 working days, depending on your bank.',
+    ],
+    baseUrl,
+    { path, label: 'Open the contract' },
+  ),
+
   'expert-profile-decision': ({ firstName, decision, note, path }, baseUrl) => {
+
     const copy = EXPERT_DECISION_COPY[decision];
     return notice(
       copy.subject,
@@ -176,6 +246,98 @@ const TEMPLATES: { [K in TemplateName]: Renderer<TemplateData[K]> } = {
       { path, label: 'Open your profile' },
     );
   },
+
+  'gig-delivery-reminder': ({ firstName, serviceTitle, daysLeft, path }, baseUrl) => notice(
+    'Your order will be accepted automatically',
+    firstName,
+    [
+      `The delivery for "${serviceTitle}" is waiting for your review. If you do nothing, it will be accepted automatically and the payment released to the expert in ${daysLeft} day${daysLeft === 1 ? '' : 's'}.`,
+      'Open the order to accept it, request a revision or open a dispute.',
+    ],
+    baseUrl,
+    { path, label: 'Review the delivery' },
+  ),
+
+  'gig-auto-accepted': ({ firstName, serviceTitle, audience, path }, baseUrl) => notice(
+    'Order accepted automatically',
+    firstName,
+    [
+      audience === 'buyer'
+        ? `The delivery for "${serviceTitle}" was not reviewed in time, so it was accepted automatically and the payment was released to the expert.`
+        : `The buyer did not review your delivery for "${serviceTitle}" in time, so it was accepted automatically and your payment was released.`,
+    ],
+    baseUrl,
+    { path, label: 'Open the order' },
+  ),
+
+  'service-decision': ({ firstName, decision, title, note, path }, baseUrl) => notice(
+    decision === 'published' ? 'Your service is now live' : 'Your service was not approved',
+    firstName,
+    [
+      decision === 'published'
+        ? `Your service "${title}" has been approved and is now listed for buyers to order.`
+        : `Your service "${title}" could not be approved for the catalogue. You can edit it and submit it again.`,
+      ...(note ? [`Note from the reviewer: ${note}`] : []),
+    ],
+    baseUrl,
+    { path, label: 'Open my services' },
+  ),
+
+  'payout-paid': ({ firstName, amount, reference, path }, baseUrl) => notice(
+    `Your payout of ${amount} has been paid`,
+    firstName,
+    [
+      `We have transferred ${amount} to your payout account. Bank reference (UTR): ${reference}.`,
+      'Transfers can take up to one working day to show in your account, depending on your bank.',
+    ],
+    baseUrl,
+    { path, label: 'Open your wallet' },
+  ),
+
+  'payout-rejected': ({ firstName, amount, note, path }, baseUrl) => notice(
+    'Your payout request was not approved',
+    firstName,
+    [
+      `Your payout request of ${amount} was rejected, and the amount is available in your wallet again.`,
+      `Reason: ${note}`,
+    ],
+    baseUrl,
+    { path, label: 'Open your wallet' },
+  ),
+
+  'invoice-issued': ({ firstName, invoiceId, amount, projectTitle, milestoneTitle, path }, baseUrl) => notice(
+    `Invoice ${invoiceId} for your escrow payment`,
+    firstName,
+    [
+      `We received your payment of ${amount} into escrow for "${milestoneTitle}" on ${projectTitle || 'your project'}.`,
+      `Invoice ${invoiceId} is ready to download.`,
+    ],
+    baseUrl,
+    { path, label: 'View invoices' },
+  ),
+
+  'dispute-opened': ({ firstName, raisedByName, contractId, milestoneTitle, reason, respondBy, path }, baseUrl) => notice(
+    `A dispute was raised on contract ${contractId}`,
+    firstName,
+    [
+      `${raisedByName || 'The other party'} raised a dispute on contract ${contractId}${milestoneTitle ? ` (milestone "${milestoneTitle}")` : ''}. Reason: ${reason}.`,
+      'The contract is paused while the dispute is open: no milestone can be moved, funded or released.',
+      `Please reply with your side of the story by ${respondBy}. After that the dispute goes to the AsteAI team for review.`,
+    ],
+    baseUrl,
+    { path, label: 'Open the dispute' },
+  ),
+
+  'dispute-resolved': ({ firstName, disputeId, contractId, outcome, note, path }, baseUrl) => notice(
+    `Dispute ${disputeId} has been resolved`,
+    firstName,
+    [
+      `The AsteAI team resolved dispute ${disputeId} on contract ${contractId}. ${outcome}`,
+      `Note from the reviewer: ${note}`,
+    ],
+    baseUrl,
+    { path, label: 'Open the dispute' },
+  ),
 };
 
 export function render<K extends TemplateName>(name: K, data: TemplateData[K], baseUrl: string): RenderedEmail {

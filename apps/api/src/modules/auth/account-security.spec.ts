@@ -98,6 +98,8 @@ class FakeDb {
   totp = new Map<string, TotpRec>();
   backup: { user_id: string; code_hash: string; used_at: Date | null }[] = [];
   outbox: { to: string; template: string; text: string }[] = [];
+  /** How far the database's NOW() runs ahead of the API server's clock. */
+  clockSkewMs = 0;
   readonly pool: Pool;
 
   constructor() {
@@ -136,8 +138,11 @@ class FakeDb {
     if (/^SELECT .* FROM user_accounts WHERE id = \$1 AND account_status = 'active'/.test(sql)) {
       return out(this.users.filter((u) => {
         if (u.id !== p[0] || !this.active(u)) return false;
-        if (/to_timestamp\(\$2\)/.test(sql) && u.password_changed_at) {
-          return Math.floor(u.password_changed_at.getTime() / 1000) <= Number(p[1]);
+        // tokenNotRevokedSql(2, 3): exact milliseconds with iatMs ($2), whole seconds without.
+        if (/WHEN \$2::double precision IS NULL/.test(sql) && u.password_changed_at) {
+          return p[1] === null
+            ? Math.floor(u.password_changed_at.getTime() / 1000) <= Number(p[2])
+            : u.password_changed_at.getTime() <= Number(p[1]);
         }
         return true;
       }).map((u) => this.userView(u)));
@@ -154,8 +159,8 @@ class FakeDb {
     }
     if (/^UPDATE user_accounts SET password_hash = \$2, password_changed_at = NOW\(\)/.test(sql)) {
       const u = this.users.find((x) => x.id === p[0])!;
-      Object.assign(u, { password_hash: p[1], password_changed_at: new Date() });
-      return out([], 1);
+      Object.assign(u, { password_hash: p[1], password_changed_at: new Date(Date.now() + this.clockSkewMs) });
+      return out([{ password_changed_at: u.password_changed_at }]);
     }
     if (/^UPDATE user_accounts SET email_verified = TRUE/.test(sql)) {
       const u = this.users.find((x) => x.id === p[0] && this.active(x));
@@ -368,7 +373,17 @@ describe('password reset', () => {
     assert.ok(await bcrypt.compare('brand-new-password', u.password_hash!));
   });
 
+  it('works for an invited account that has no password yet, and verifies its email', async () => {
+    const u = t.db.addUser({ email: 'invited@example.test', password_hash: null, email_verified: false });
+    assert.equal(await t.auth.validateUser('invited@example.test', ''), null);
+    await t.security.forgotPassword('invited@example.test');
+    await t.security.resetPassword(linkToken(t.db.outbox[0].text), 'first-password-1');
+    assert.equal(u.email_verified, true);
+    assert.equal((await t.auth.validateUser('invited@example.test', 'first-password-1'))?.id, u.id);
+  });
+
   it('refuses an expired link and an unknown one', async () => {
+
     t.db.addUser({ email: 'a@example.test' });
     await t.security.forgotPassword('a@example.test');
     const raw = linkToken(t.db.outbox[0].text);
@@ -377,7 +392,49 @@ describe('password reset', () => {
     await assert.rejects(t.security.resetPassword('x'.repeat(43), 'brand-new-password'), status(400));
   });
 
+  it('access tokens carry a millisecond issue time', async () => {
+    const u = t.db.addUser({ email: 'a@example.test' });
+    const before = Date.now();
+    const payload = t.jwt.verify((await t.auth.login(asUser(u))).accessToken);
+    assert.equal(typeof payload.iatMs, 'number');
+    assert.ok(payload.iatMs >= before && payload.iatMs <= Date.now());
+  });
+
+  it('revokes a token minted 1 ms before a change, keeps one minted after (iatMs)', async () => {
+    const u = t.db.addUser({ email: 'a@example.test' });
+    const changedAt = Date.now() - 5_000;
+    u.password_changed_at = new Date(changedAt);
+    const sec = Math.floor(changedAt / 1000);
+    const token = (iatMs: number) => ({ sub: u.id, role: 'Candidate' as const, tenantId: null, iat: sec, iatMs });
+    // Same second as the change, so the old whole-second rule would have let this one through.
+    await assert.rejects(t.strategy.validate(token(changedAt - 1)), UnauthorizedException);
+    assert.equal((await t.strategy.validate(token(changedAt))).id, u.id);
+    assert.equal((await t.strategy.validate(token(changedAt + 1))).id, u.id);
+  });
+
+  it('changing the password revokes older tokens but not the new one, even when the database clock runs ahead', async () => {
+    const u = t.db.addUser({ email: 'a@example.test', password_hash: await bcrypt.hash('old-password', 4) });
+    const old = t.jwt.verify((await t.auth.login(asUser(u))).accessToken);
+    t.db.clockSkewMs = 50;
+    const { accessToken } = await t.security.changePassword(asUser(u), 'old-password', 'new-password-1');
+    await assert.rejects(t.strategy.validate(old), UnauthorizedException);
+    const fresh = t.jwt.verify(accessToken);
+    assert.ok(fresh.iatMs > u.password_changed_at!.getTime());
+    assert.equal((await t.strategy.validate(fresh)).id, u.id);
+  });
+
+  it('a legacy token without iatMs follows the whole-second rule', async () => {
+
+    const u = t.db.addUser({ email: 'a@example.test' });
+    const changedAt = Math.floor(Date.now() / 1000) * 1000 - 5_000 + 400; // .400 into a second
+    u.password_changed_at = new Date(changedAt);
+    const legacy = (iat: number) => ({ sub: u.id, role: 'Candidate' as const, tenantId: null, iat });
+    assert.equal((await t.strategy.validate(legacy(Math.floor(changedAt / 1000)))).id, u.id);
+    await assert.rejects(t.strategy.validate(legacy(Math.floor(changedAt / 1000) - 1)), UnauthorizedException);
+  });
+
   it('access tokens issued before a reset stop working', async () => {
+
     const u = t.db.addUser({ email: 'a@example.test' });
     const { accessToken } = await t.auth.login(asUser(u));
     const payload = t.jwt.verify(accessToken);

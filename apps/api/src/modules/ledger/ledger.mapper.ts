@@ -1,4 +1,5 @@
 import type { LedgerEntry, LedgerType } from '@asteai/types';
+import type { WalletLedgerGroup } from './wallet';
 
 export interface LedgerRow {
   id: string;
@@ -29,4 +30,17 @@ export function mapLedgerRow(row: LedgerRow): LedgerEntry {
     by: row.by,
     ref: row.ref ?? '',
   };
+}
+
+/** A `GROUP BY type, ref, user_id, payee_id` row behind the wallet (see wallet.ts). */
+export interface WalletGroupRow {
+  type: string;
+  ref: string | null;
+  user_id: string | null;
+  payee_id: string | null;
+  total: string | number;
+}
+
+export function mapWalletGroup(row: WalletGroupRow): WalletLedgerGroup {
+  return { type: row.type, ref: row.ref, userId: row.user_id, payeeId: row.payee_id, total: Number(row.total) };
 }

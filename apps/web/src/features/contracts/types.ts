@@ -2,5 +2,5 @@
 // @asteai/types). Type-only.
 export type {
   CapturePaymentResult, Contract, ContractMilestone, ContractMilestoneStatus, ContractStatus, ContractSummary,
-  CreateContractInput, EngagementModel, FundMilestoneResult, PaymentTerms,
+  CreateContractInput, EngagementModel, PaymentTerms,
 } from '@asteai/types';

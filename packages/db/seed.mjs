@@ -21,6 +21,17 @@ for (const line of envText.split(/\r?\n/)) {
   if (m) env[m[1].trim()] = m[2].trim();
 }
 
+// The seed creates demo accounts with a published password (and an admin). Never against
+// production unless someone explicitly asks for it on the command line.
+const nodeEnv = process.env.NODE_ENV || env.NODE_ENV;
+if (nodeEnv === 'production' && process.env.ALLOW_DEMO_SEED !== 'true') {
+  console.error(
+    'Refusing to seed: NODE_ENV is "production". This script creates demo accounts (including an Admin) '
+      + 'with a well-known password. If you really want that, run it again with ALLOW_DEMO_SEED=true.',
+  );
+  process.exit(1);
+}
+
 const client = new pg.Client({
   host: env.DATABASE_HOST,
   port: Number(env.DATABASE_PORT || 5432),

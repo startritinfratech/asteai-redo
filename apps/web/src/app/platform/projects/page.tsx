@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import useSWR from 'swr';
-import type { MilestoneStatus, Project, ProjectStage } from '@asteai/types';
+import type { MilestoneStatus, Project, ProjectStage, Proposal } from '@asteai/types';
 import { api, errorMessage, fetcher } from '@/lib/api';
 import { Button, Empty, Eyebrow, KPI, Panel, Tag, type TagColor } from '@/components/ui';
 import { CreateContractWizard } from '@/features/contracts';
@@ -22,21 +22,6 @@ const STAGE_COLOR: Partial<Record<ProjectStage | MilestoneStatus, TagColor>> = {
 /** Same rule as the API (proposals.service AWARDABLE_STAGES). */
 const AWARDABLE_STAGES: readonly ProjectStage[] = ['Open for Bids', 'Shortlisting'];
 
-/** GET /proposals/project/:id rows (snake_case, straight from the API). */
-interface ProposalRow {
-  id: string;
-  project_id: string;
-  expert_id: string;
-  expert_name: string;
-  price: string | number; // NUMERIC arrives as a string
-  days: number;
-  note: string;
-  status: 'Pending' | 'Awarded' | 'Rejected';
-  created_at: string;
-  /** The contract created for this proposal, if any. */
-  contract_id: string | null;
-}
-
 type ProjectWithContract = Project & { contractId?: string | null };
 
 const inr = (n: number) => `₹${n.toLocaleString('en-IN')}`;
@@ -44,7 +29,7 @@ const contractHref = (id: string) => `/platform/contracts/${encodeURIComponent(i
 
 export default function ProjectsPage() {
   const { data, error, isLoading, mutate } = useSWR<ProjectWithContract[]>('/projects/mine', fetcher);
-  const [wizardFor, setWizardFor] = useState<{ project: ProjectWithContract; proposal: ProposalRow } | null>(null);
+  const [wizardFor, setWizardFor] = useState<{ project: ProjectWithContract; proposal: Proposal } | null>(null);
 
   return (
     <div className={styles.page}>
@@ -69,8 +54,8 @@ export default function ProjectsPage() {
           <CreateContractWizard
             proposalId={wizardFor.proposal.id}
             projectTitle={wizardFor.project.title}
-            expertName={wizardFor.proposal.expert_name}
-            suggestedTotal={Number(wizardFor.proposal.price)}
+            expertName={wizardFor.proposal.expertName ?? ''}
+            suggestedTotal={wizardFor.proposal.price}
             defaultNdaRequired={wizardFor.project.ndaRequired}
             onCancel={() => setWizardFor(null)}
           />
@@ -85,17 +70,17 @@ function ProjectCard({
 }: {
   project: ProjectWithContract;
   onAwarded: () => void;
-  onCreateContract: (proposal: ProposalRow) => void;
+  onCreateContract: (proposal: Proposal) => void;
 }) {
   const key = `/proposals/project/${encodeURIComponent(p.id)}`;
-  const { data: proposals, error, mutate } = useSWR<ProposalRow[]>(key, fetcher);
+  const { data: proposals, error, mutate } = useSWR<Proposal[]>(key, fetcher);
   const [busy, setBusy] = useState<string | null>(null);
   const [awardError, setAwardError] = useState<string | null>(null);
   const awardable = AWARDABLE_STAGES.includes(p.stage);
 
-  async function award(proposal: ProposalRow) {
+  async function award(proposal: Proposal) {
     const ok = window.confirm(
-      `Award "${p.title}" to ${proposal.expert_name} for ${inr(Number(proposal.price))}? `
+      `Award "${p.title}" to ${proposal.expertName} for ${inr(proposal.price)}? `
       + 'All other proposals on this project will be rejected.',
     );
     if (!ok) return;
@@ -106,7 +91,7 @@ function ProjectCard({
       await mutate();
       onAwarded();
       // Straight on to the contract for the awarded proposal.
-      onCreateContract({ ...proposal, status: 'Awarded', contract_id: null });
+      onCreateContract({ ...proposal, status: 'Awarded', contractId: null });
     } catch (err) {
       setAwardError(errorMessage(err, 'Could not award this proposal'));
     } finally {
@@ -142,12 +127,12 @@ function ProjectCard({
         {proposals?.map((pr) => (
           <div key={pr.id} className={styles.proposal}>
             <div className={styles.proposalMain}>
-              <span className={styles.proposalWho}>{pr.expert_name}</span>
-              <span className={styles.mAmt}>{inr(Number(pr.price))} · {pr.days} days</span>
+              <span className={styles.proposalWho}>{pr.expertName}</span>
+              <span className={styles.mAmt}>{inr(pr.price)} · {pr.days} days</span>
             </div>
             {pr.note && <p className={styles.proposalNote}>{pr.note}</p>}
             <div className={styles.proposalActions}>
-              <Tag color={pr.status === 'Awarded' ? 'mint' : pr.status === 'Rejected' ? 'grey' : 'amber'}>
+              <Tag color={pr.status === 'Awarded' ? 'mint' : pr.status === 'Pending' ? 'amber' : 'grey'}>
                 {pr.status}
               </Tag>
               {pr.status === 'Pending' && awardable && (
@@ -155,8 +140,9 @@ function ProjectCard({
                   {busy === pr.id ? 'Awarding…' : 'Award'}
                 </Button>
               )}
-              {pr.status === 'Awarded' && (pr.contract_id
-                ? <Link className={styles.link} href={contractHref(pr.contract_id)}>View contract</Link>
+              {pr.status === 'Awarded' && (pr.contractId
+                ? <Link className={styles.link} href={contractHref(pr.contractId)}>View contract</Link>
+
                 : (
                   <Button variant={['primary', 'sm']} onClick={() => onCreateContract(pr)}>
                     Create contract

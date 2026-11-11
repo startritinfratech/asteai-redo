@@ -28,7 +28,7 @@ test('splitEvenly always adds up', () => {
 
 test('milestone actions follow role and status', () => {
   assert.deepEqual(milestoneUiActions('buyer', 'active', { status: 'pending', paymentPending: false }), ['fund']);
-  assert.deepEqual(milestoneUiActions('buyer', 'active', { status: 'pending', paymentPending: true }), []);
+  assert.deepEqual(milestoneUiActions('buyer', 'active', { status: 'pending', paymentPending: true }), ['fund']);
   assert.deepEqual(milestoneUiActions('buyer', 'active', { status: 'submitted', paymentPending: false }), ['accept', 'request_revision']);
   assert.deepEqual(milestoneUiActions('buyer', 'active', { status: 'accepted', paymentPending: false }), ['release']);
   assert.deepEqual(milestoneUiActions('expert', 'active', { status: 'funded', paymentPending: false }), ['submit']);

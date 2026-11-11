@@ -39,7 +39,7 @@ export class TenantsController {
   @Roles('Admin', 'Employer')
   addTeamMember(@Param('id') id: string, @Body() body: AddTeamMemberDto, @CurrentUser() user: User) {
     assertTenantAccess(user, id);
-    return this.svc.addTeamMember(id, body);
+    return this.svc.addTeamMember(id, body, user);
   }
 
   @Get(':id/pools')

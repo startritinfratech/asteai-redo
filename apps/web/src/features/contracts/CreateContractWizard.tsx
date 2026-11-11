@@ -137,7 +137,7 @@ export function CreateContractWizard({
               <Field label={`Milestone ${i + 1}`}>
                 <input value={m.title} maxLength={200} onChange={(e) => updateMilestone(i, { title: e.target.value })} />
               </Field>
-              <Field label="Amount">
+              <Field label="Amount (INR)">
                 <input
                   type="number" inputMode="decimal" min={0} step={0.01}
                   value={m.amount} onChange={(e) => updateMilestone(i, { amount: e.target.value })}

@@ -1,11 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import useSWR from 'swr';
 import { errorMessage, fetcher } from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
 import { Button, Empty, Field, KPI, PageHeader, Panel, Tag } from '@/components/ui';
+import { RaiseDisputeForm } from '../disputes/RaiseDisputeForm';
+import { PAYMENT_MESSAGES, payWithRazorpay, type PaymentOutcome } from '../payments';
 import { contractKey, contractsApi } from './api';
 import {
   canCancel, describeTerms, formatMoney, milestoneUiActions, type MilestoneUiAction, type Side, sideOf, STATUS_LABEL,
@@ -39,7 +41,7 @@ export function ContractDetail({ id }: { id: string }) {
     <div className={styles.page}>
       <PageHeader
         eyebrow="Contract"
-        title={contract.projectTitle || contract.id}
+        title={contract.title || contract.id}
         sub={<span className={styles.mono}>{contract.id}</span>}
         actions={<Link href="/platform/contracts">All contracts</Link>}
       />
@@ -62,9 +64,20 @@ export function ContractDetail({ id }: { id: string }) {
         {contract.status === 'cancelled' && contract.cancelReason && (
           <p className={styles.note}>Cancelled: {contract.cancelReason}</p>
         )}
-        {contract.status === 'cancelled' && toMinor(contract.escrowFunded) > toMinor(contract.released) && (
+        {toMinor(contract.refundDue) > 0 && (
           <p className={styles.pending}>
-            {formatMoney(contract.escrowFunded - contract.released, contract.currency)} held in escrow is due back to the buyer (refund pending).
+            Refund due: {formatMoney(contract.refundDue, contract.currency)}, held in escrow when the contract was cancelled, is owed back to the buyer.
+          </p>
+        )}
+        {contract.status === 'disputed' && (
+          <p className={styles.pending}>
+            This contract is paused while a dispute is open: milestones cannot be funded, submitted or released.{' '}
+            <Link href="/platform/disputes">View disputes</Link>
+          </p>
+        )}
+        {contract.gigOrderId && (
+          <p className={styles.muted}>
+            Pre-packaged service order: <Link href={`/platform/orders/${encodeURIComponent(contract.gigOrderId)}`}>open the order</Link>
           </p>
         )}
         {contract.source === 'legacy_project' && (
@@ -89,6 +102,10 @@ export function ContractDetail({ id }: { id: string }) {
           ))}
         </ol>
       </Panel>
+
+      {side === 'admin' && contract.status === 'cancelled' && toMinor(contract.refundDue) > 0 && (
+        <RefundPanel contract={contract} onDone={refresh} />
+      )}
 
       {canCancel(side, contract) && <CancelPanel contract={contract} side={side} onDone={refresh} />}
     </div>
@@ -199,25 +216,89 @@ const ACTION_LABEL: Record<MilestoneUiAction, string> = {
   release: 'Release payment',
 };
 
+const POLL_EVERY_MS = 3000;
+const POLL_TIMES = 6;
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+type PayNotice = { tone: 'ok' | 'pending' | 'error'; text: string };
+
 function MilestoneItem({
   contract, milestone: m, side, onDone,
 }: { contract: Contract; milestone: ContractMilestone; side: Side; onDone: (c?: Contract) => void }) {
+  const user = useAuthStore((s) => s.user);
   const [mode, setMode] = useState<MilestoneUiAction | null>(null);
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [payNotice, setPayNotice] = useState<PayNotice | null>(null);
+  const [disputing, setDisputing] = useState(false);
+  const mounted = useRef(true);
+  useEffect(() => () => { mounted.current = false; }, []);
   const actions = milestoneUiActions(side, contract.status, m);
   const amount = formatMoney(m.amount, contract.currency);
+  const canDispute = contract.status === 'active' && (side === 'buyer' || side === 'expert')
+    && ['funded', 'submitted', 'revision_requested', 'accepted'].includes(m.status);
+
+  /** After Razorpay took the money: re-fetch a few times until the milestone shows as funded. */
+  async function waitForCapture(): Promise<boolean> {
+    for (let i = 0; i < POLL_TIMES && mounted.current; i++) {
+      await sleep(POLL_EVERY_MS);
+      try {
+        const next = await contractsApi.get(contract.id);
+        onDone(next);
+        if (next.milestones.find((x) => x.id === m.id)?.status !== 'pending') return true;
+      } catch {
+        // keep polling; the next attempt may succeed
+      }
+    }
+    return false;
+  }
+
+  async function fund() {
+    const checkout = await contractsApi.fund(contract.id, m.id);
+    let outcome: PaymentOutcome;
+    try {
+      outcome = await payWithRazorpay(checkout, {
+        name: 'AsteAI escrow',
+        description: `${contract.id} · milestone ${m.seq}: ${m.title}`,
+        prefill: { name: [user?.firstName, user?.lastName].filter(Boolean).join(' '), email: user?.email },
+      });
+    } catch (err) {
+      setMode(null);
+      onDone(); // the payment request is open; show it
+      setPayNotice({ tone: 'error', text: errorMessage(err, PAYMENT_MESSAGES.loadFailed) });
+      return;
+    }
+    setMode(null);
+    if (outcome.kind === 'captured') {
+      setPayNotice({ tone: 'ok', text: PAYMENT_MESSAGES.captured });
+      onDone();
+    } else if (outcome.kind === 'pending') {
+      setPayNotice({ tone: 'pending', text: PAYMENT_MESSAGES.pending });
+      const funded = await waitForCapture();
+      if (!mounted.current) return;
+      setPayNotice(funded
+        ? { tone: 'ok', text: PAYMENT_MESSAGES.captured }
+        : { tone: 'pending', text: `${PAYMENT_MESSAGES.pending} This can take a few minutes; you can leave this page.` });
+    } else {
+      onDone();
+      setPayNotice({
+        tone: outcome.kind === 'failed' ? 'error' : 'pending',
+        text: outcome.kind === 'failed' ? PAYMENT_MESSAGES.failed(outcome.message) : PAYMENT_MESSAGES.dismissed,
+      });
+    }
+  }
 
   async function confirm() {
     if (!mode) return;
     setBusy(true);
     setError(null);
+    setPayNotice(null);
     try {
       const id = contract.id;
       if (mode === 'fund') {
-        await contractsApi.fund(id, m.id);
-        onDone(); // re-fetch: the milestone now shows its pending payment
+        await fund();
+        return;
       } else {
         const next = await {
           submit: () => contractsApi.submit(id, m.id, note.trim()),
@@ -237,8 +318,9 @@ function MilestoneItem({
   }
 
   const needsNote = mode === 'submit' || mode === 'request_revision';
+  const label = (a: MilestoneUiAction) => (a === 'fund' && m.paymentPending ? 'Complete payment' : ACTION_LABEL[a]);
   const prompt: Record<MilestoneUiAction, string> = {
-    fund: `Fund ${amount} into escrow for this milestone? You will be asked to pay through the payment provider; the milestone is funded once the payment is confirmed.`,
+    fund: `Fund ${amount} into escrow for this milestone? You will pay through Razorpay; the milestone is funded once the payment is confirmed.`,
     submit: 'Describe what you are delivering.',
     request_revision: 'Tell the expert what needs to change.',
     accept: `Accept this delivery? You can then release ${amount} to the expert.`,
@@ -258,24 +340,52 @@ function MilestoneItem({
         {m.revisionCount > 0 && <span className={styles.muted}>{m.revisionCount} revision{m.revisionCount === 1 ? '' : 's'}</span>}
         {m.releasedAt && <span className={styles.muted}>Released {formatDate(m.releasedAt)}</span>}
       </div>
-      {m.status === 'pending' && m.paymentPending && (
-        <p className={styles.pending} role="status">Payment pending — awaiting payment provider</p>
+      {m.status === 'pending' && m.paymentPending && !payNotice && (
+        <p className={styles.pending} role="status">
+          {side === 'buyer'
+            ? 'Payment started but not confirmed yet. If you already paid, this updates when the bank confirms; otherwise use Complete payment.'
+            : 'Payment pending — awaiting confirmation from Razorpay'}
+        </p>
+      )}
+      {payNotice && (
+        <p
+          className={payNotice.tone === 'ok' ? styles.ok : payNotice.tone === 'error' ? styles.error : styles.pending}
+          role={payNotice.tone === 'error' ? 'alert' : 'status'}
+        >
+          {payNotice.text}
+        </p>
       )}
       {m.submissionNote && <p className={styles.note}>Delivery note: {m.submissionNote}</p>}
       {m.status === 'revision_requested' && m.revisionNote && <p className={styles.note}>Revision requested: {m.revisionNote}</p>}
 
-      {actions.length > 0 && !mode && (
+      {actions.length > 0 && !mode && !busy && (
         <div className={styles.actions}>
           {actions.map((a) => (
             <Button
               key={a}
               variant={a === 'request_revision' ? 'rose' : a === 'release' || a === 'accept' ? 'mint' : 'primary'}
-              onClick={() => { setError(null); setMode(a); }}
+              onClick={() => { setError(null); setPayNotice(null); setMode(a); }}
             >
-              {ACTION_LABEL[a]}
+              {label(a)}
             </Button>
           ))}
         </div>
+      )}
+
+      {canDispute && !mode && !disputing && (
+        <div className={styles.actions}>
+          <Button variant="rose" onClick={() => setDisputing(true)}>Raise a dispute</Button>
+        </div>
+      )}
+      {disputing && (
+        <RaiseDisputeForm
+          contractId={contract.id}
+          milestoneId={m.id}
+          milestoneTitle={m.title}
+          maxAmount={m.amount}
+          currency={contract.currency}
+          onCancel={() => setDisputing(false)}
+        />
       )}
 
       {mode && (
@@ -293,13 +403,81 @@ function MilestoneItem({
               disabled={busy || (needsNote && !note.trim())}
               onClick={() => void confirm()}
             >
-              {busy ? 'Working…' : mode === 'fund' ? `Confirm: fund ${amount}` : mode === 'release' ? `Confirm: release ${amount}` : ACTION_LABEL[mode]}
+              {busy
+                ? (mode === 'fund' ? 'Waiting for payment…' : 'Working…')
+                : mode === 'fund' ? `Pay ${amount}` : mode === 'release' ? `Confirm: release ${amount}` : ACTION_LABEL[mode]}
             </Button>
           </div>
         </div>
       )}
       {error && <p className={styles.error} role="alert">{error}</p>}
     </li>
+  );
+}
+
+// ─── Refund (admin) ─────────────────────────────────────────────────────────
+
+function RefundPanel({ contract, onDone }: { contract: Contract; onDone: (c?: Contract) => void }) {
+  const [open, setOpen] = useState(false);
+  const [reason, setReason] = useState('');
+  const [amountText, setAmountText] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [done, setDone] = useState<string | null>(null);
+  const due = formatMoney(contract.refundDue, contract.currency);
+  const amount = amountText.trim() ? Number(amountText) : undefined;
+  const amountOk = amount === undefined
+    || (Number.isFinite(amount) && amount > 0 && toMinor(amount) <= toMinor(contract.refundDue) && toMinor(amount) / 100 === amount);
+
+  async function refund() {
+    setBusy(true);
+    setError(null);
+    try {
+      const out = await contractsApi.refund(contract.id, { reason: reason.trim(), amount });
+      const total = out.refunds.filter((r) => r.status !== 'failed').reduce((acc, r) => acc + toMinor(r.amount), 0) / 100;
+      const failed = out.refunds.filter((r) => r.status === 'failed');
+      setDone(failed.length
+        ? `Razorpay refused ${failed.length} refund${failed.length === 1 ? '' : 's'}: ${failed[0].error ?? 'unknown reason'}`
+        : `Refund of ${formatMoney(total, contract.currency)} requested. It is settled when Razorpay confirms it (usually within minutes); the buyer is notified then.`);
+      setOpen(false);
+      setReason('');
+      setAmountText('');
+      onDone();
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Panel className={styles.stack}>
+      <h2 className={styles.h2}>Refund</h2>
+      <p className={styles.muted}>{due} is due back to the buyer. Refunds go to the original payment through Razorpay.</p>
+      {!open ? (
+        <div className={styles.actions}>
+          <Button variant="primary" onClick={() => { setDone(null); setOpen(true); }}>Issue refund…</Button>
+        </div>
+      ) : (
+        <div className={styles.confirm}>
+          <Field label="Reason">
+            <textarea rows={3} maxLength={2000} value={reason} onChange={(e) => setReason(e.target.value)} />
+          </Field>
+          <Field label={`Amount (leave empty to refund all ${due})`}>
+            <input inputMode="decimal" value={amountText} onChange={(e) => setAmountText(e.target.value)} />
+          </Field>
+          {!amountOk && <p className={styles.error}>Enter an amount up to {due}, with at most 2 decimals.</p>}
+          <div className={styles.actions}>
+            <Button onClick={() => setOpen(false)} disabled={busy}>Back</Button>
+            <Button variant="primary" disabled={busy || reason.trim().length < 3 || !amountOk} onClick={() => void refund()}>
+              {busy ? 'Refunding…' : `Confirm: refund ${amount !== undefined && amountOk ? formatMoney(amount, contract.currency) : due}`}
+            </Button>
+          </div>
+        </div>
+      )}
+      {done && <p className={styles.ok} role="status">{done}</p>}
+      {error && <p className={styles.error} role="alert">{error}</p>}
+    </Panel>
   );
 }
 

@@ -75,7 +75,7 @@ export class ChatsGateway implements OnGatewayInit, OnGatewayConnection, OnGatew
     // Like JwtStrategy.validate: no special-purpose tokens (2FA challenges), and the user
     // must be active, not blocked, and not have changed the password since the token was issued.
     if (payload.purpose !== undefined || typeof payload.sub !== 'string') throw new Error('not an access token');
-    const user = await this.chats.loadActiveUser(payload.sub, payload.iat ?? 0);
+    const user = await this.chats.loadActiveUser(payload.sub, payload);
     if (!user) throw new Error('inactive user');
     socket.data.user = user;
     socket.data.lastTyping = new Map();

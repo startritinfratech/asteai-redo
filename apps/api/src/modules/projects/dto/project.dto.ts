@@ -1,7 +1,6 @@
 import { Type } from 'class-transformer';
 import {
-  ArrayMaxSize, IsArray, IsBoolean, IsIn, IsNumber, IsOptional, IsString, IsUUID, MaxLength, Min, MinLength,
-  ValidateNested,
+  ArrayMaxSize, IsArray, IsBoolean, IsIn, IsNumber, IsOptional, IsString, MaxLength, Min, ValidateNested,
 } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 import { PROJECT_STAGES, ProjectStage } from '@asteai/types';
@@ -27,14 +26,4 @@ export class CreateProjectDto {
 
 export class UpdateProjectStageDto {
   @ApiProperty({ enum: PROJECT_STAGES }) @IsIn(PROJECT_STAGES as readonly string[]) stage: ProjectStage;
-}
-
-export class CreateDisputeDto {
-  @ApiProperty() @IsString() @MaxLength(32) projectId: string;
-  @ApiProperty() @IsUUID() raisedAgainst: string;
-  @ApiProperty() @IsString() @MinLength(10) @MaxLength(4000) reason: string;
-}
-
-export class ResolveDisputeDto {
-  @ApiProperty() @IsString() @MinLength(1) @MaxLength(4000) resolution: string;
 }

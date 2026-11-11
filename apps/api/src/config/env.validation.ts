@@ -1,7 +1,7 @@
 import 'reflect-metadata';
 import { Type, plainToInstance } from 'class-transformer';
 import {
-  IsIn, IsInt, IsOptional, IsString, IsUrl, Max, Min, MinLength, ValidateIf, validateSync,
+  IsIn, IsInt, IsOptional, IsString, IsUrl, Matches, Max, Min, MinLength, ValidateIf, validateSync,
 } from 'class-validator';
 
 /**
@@ -58,6 +58,14 @@ class EnvironmentVariables {
   @IsOptional() @IsIn(['true', 'false']) EMAIL_WORKER_ENABLED?: string;
   @IsOptional() @Type(() => Number) @IsInt() @Min(500) EMAIL_POLL_MS?: number;
 
+  // ── Disputes ──
+  /** The dispute SLA sweep (every 10 min, one instance at a time via a pg advisory lock). */
+  @IsOptional() @IsIn(['true', 'false']) DISPUTE_SWEEP_ENABLED?: string;
+
+  // ── Gigs ──
+  /** The gig sweep (delivery reminders, auto-accept, overdue notices; one instance at a time via a pg advisory lock). */
+  @IsOptional() @IsIn(['true', 'false']) GIG_SWEEP_ENABLED?: string;
+
   // ── Auth ──
   @IsString() @MinLength(32, { message: 'JWT_SECRET must be at least 32 characters' })
   JWT_SECRET: string;
@@ -74,6 +82,17 @@ class EnvironmentVariables {
   @MinLength(32, { message: 'TOTP_ENCRYPTION_KEY must be at least 32 characters' })
   TOTP_ENCRYPTION_KEY?: string;
 
+  /** Encrypts expert payout bank/UPI details (AES-256-GCM). */
+  @ValidateIf((env: EnvironmentVariables) => env.NODE_ENV === 'production' || env.PAYOUT_ENCRYPTION_KEY !== undefined)
+  @IsString({ message: 'PAYOUT_ENCRYPTION_KEY is required in production' })
+  @MinLength(32, { message: 'PAYOUT_ENCRYPTION_KEY must be at least 32 characters' })
+  PAYOUT_ENCRYPTION_KEY?: string;
+
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1) PAYOUT_MIN?: number;
+  @IsOptional() @IsString() INVOICE_ISSUER_NAME?: string;
+  @IsOptional() @IsString() INVOICE_ISSUER_ADDRESS?: string;
+  @IsOptional() @IsString() INVOICE_ISSUER_GSTIN?: string;
+
   // ── AI service ──
   @IsOptional() @IsUrl({ require_tld: false }) AI_SERVICE_URL?: string;
   @IsOptional() @IsUrl({ require_tld: false }) AI_SERVICE_PUBLIC_URL?: string;
@@ -82,6 +101,16 @@ class EnvironmentVariables {
   @IsOptional() @Type(() => Number) @IsInt() @Min(60) AI_TOKEN_TTL_SECONDS?: number;
 
   @IsOptional() @IsUrl({ require_tld: false }) PUBLIC_WEB_URL?: string;
+
+  // ── Payments (Razorpay) ── unset: payment endpoints answer 503
+  @IsOptional() @IsString() @Matches(/^rzp_(test|live)_/, { message: 'RAZORPAY_KEY_ID must start with rzp_test_ or rzp_live_' })
+  RAZORPAY_KEY_ID?: string;
+
+  @ValidateIf((env: EnvironmentVariables) => env.RAZORPAY_KEY_ID !== undefined)
+  @IsString({ message: 'RAZORPAY_KEY_SECRET is required when RAZORPAY_KEY_ID is set' }) @MinLength(8)
+  RAZORPAY_KEY_SECRET?: string;
+
+  @IsOptional() @IsString() @MinLength(8) RAZORPAY_WEBHOOK_SECRET?: string;
 }
 
 /** Empty strings in .env files mean "not set". */
@@ -96,8 +125,14 @@ export function validateEnv(config: Record<string, unknown>): Record<string, unk
   if (env.AI_JWT_SECRET && env.AI_JWT_SECRET === env.JWT_SECRET) {
     problems.push('AI_JWT_SECRET must differ from JWT_SECRET (the AI service must not be able to mint logins)');
   }
+  if (env.PAYOUT_ENCRYPTION_KEY && [env.JWT_SECRET, env.TOTP_ENCRYPTION_KEY].includes(env.PAYOUT_ENCRYPTION_KEY)) {
+    problems.push('PAYOUT_ENCRYPTION_KEY must differ from JWT_SECRET and TOTP_ENCRYPTION_KEY');
+  }
   if (env.TOTP_ENCRYPTION_KEY && env.TOTP_ENCRYPTION_KEY === env.JWT_SECRET) {
     problems.push('TOTP_ENCRYPTION_KEY must differ from JWT_SECRET');
+  }
+  if (env.RAZORPAY_WEBHOOK_SECRET && env.RAZORPAY_WEBHOOK_SECRET === env.RAZORPAY_KEY_SECRET) {
+    problems.push('RAZORPAY_WEBHOOK_SECRET must differ from RAZORPAY_KEY_SECRET');
   }
   if (env.NODE_ENV === 'production' && /^replace_with/.test(env.JWT_SECRET ?? '')) {
     problems.push('JWT_SECRET still has the .env.example placeholder');

@@ -17,6 +17,8 @@ const API_PREFIX = 'api/v1';
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
   const app = await NestFactory.create(AppModule, {
+    // The Razorpay webhook verifies its signature over the exact request bytes (req.rawBody).
+    rawBody: true,
     logger: process.env.NODE_ENV === 'production'
       ? ['error', 'warn', 'log']
       : ['error', 'warn', 'log', 'debug'],

@@ -219,20 +219,39 @@ export interface Milestone {
   dueDate: number;
 }
 
+/**
+ * Pending → Awarded | Rejected when the buyer awards a bid. Once a contract for the awarded
+ * bid is declined by the expert ('Declined') or cancelled before any money moved
+ * ('Withdrawn'), the project reopens and the bids the award rejected are 'Pending' again.
+ */
+export const PROPOSAL_STATUSES = ['Pending', 'Awarded', 'Rejected', 'Declined', 'Withdrawn'] as const;
+export type ProposalStatus = typeof PROPOSAL_STATUSES[number];
+
+/** A bid on a project, as returned by the /proposals endpoints. */
 export interface Proposal {
   id: string;
-  by: string;
+  projectId: string;
+  expertId: string;
   price: number;
   days: number;
   note: string;
-  status: 'Pending' | 'Awarded' | 'Rejected';
-  t: number;
+  status: ProposalStatus;
+  createdAt: string; // ISO
+  updatedAt: string; // ISO
+  /** GET /proposals/project/:id (the buyer's view). */
+  expertName?: string;
+  /** GET /proposals/mine (the expert's view). */
+  projectTitle?: string;
+  projectStage?: ProjectStage;
+  /** The contract for this proposal, once the buyer created one; undefined when not selected. */
+  contractId?: string | null;
 }
 
 export interface Project {
   id: string;
   buyerId: string;
-  tenantId: string;
+  /** null for a buyer's own project (not owned by a tenant). */
+  tenantId: string | null;
   title: string;
   domain: string;
   budget: number;
@@ -270,11 +289,8 @@ export interface LedgerEntry {
 }
 
 /** GET /ledger/wallet: a user's wallet totals (in INR). */
-export interface WalletSummary {
-  earned: number;
-  fees: number;
-  pending: number;
-}
+/** GET /ledger/wallet (kept for older callers; see WalletBalances in ./billing). */
+export type { WalletBalances as WalletSummary } from './billing';
 
 // ─── Dashboards ─────────────────────────────────────────────────────────────
 
@@ -443,3 +459,7 @@ export * from './chat';
 export * from './contract';
 export * from './profile';
 export * from './account';
+export * from './payment';
+export * from './billing';
+export * from './dispute';
+export * from './gig';

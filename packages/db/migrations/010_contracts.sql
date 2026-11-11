@@ -17,8 +17,14 @@
 
 CREATE TABLE IF NOT EXISTS contracts (
   id                  VARCHAR(32)    PRIMARY KEY,                    -- 'CT-…' (generateId)
-  project_id          VARCHAR(32)    NOT NULL REFERENCES projects(id),
-  proposal_id         VARCHAR(32)    NOT NULL UNIQUE REFERENCES proposals(id),
+  -- project_id / proposal_id are NULL for a gig contract (source = 'gig'): ordering a
+  -- pre-packaged service creates the contract directly, with no project or proposal.
+  -- (014_gigs.sql adds the foreign key for gig_order_id.)
+  project_id          VARCHAR(32)    REFERENCES projects(id),
+  proposal_id         VARCHAR(32)    UNIQUE REFERENCES proposals(id),
+  gig_order_id        VARCHAR(32)    UNIQUE,
+  -- Shown instead of the project title when there is no project (a gig contract: the gig title).
+  title               VARCHAR(200),
   tenant_id           VARCHAR(64)    REFERENCES tenants(id) ON DELETE SET NULL,
   buyer_id            UUID           NOT NULL REFERENCES user_accounts(id),
   expert_id           UUID           NOT NULL REFERENCES user_accounts(id),
@@ -40,10 +46,14 @@ CREATE TABLE IF NOT EXISTS contracts (
   expert_signature_ip VARCHAR(64),
   cancelled_by        UUID           REFERENCES user_accounts(id),
   cancel_reason       TEXT,
-  source              VARCHAR(24)    NOT NULL DEFAULT 'app',         -- 'app' | 'legacy_project'
+  -- Escrow still held when the contract was cancelled (escrow_funded − released): owed back
+  -- to the buyer. Set by an admin cancel; the refund itself is processed outside the app.
+  refund_due          NUMERIC(12,2)  NOT NULL DEFAULT 0 CHECK (refund_due >= 0),
+  source              VARCHAR(24)    NOT NULL DEFAULT 'app',         -- 'app' | 'legacy_project' | 'gig'
   created_at          TIMESTAMPTZ    NOT NULL DEFAULT NOW(),
   updated_at          TIMESTAMPTZ    NOT NULL DEFAULT NOW(),
   CHECK (buyer_id <> expert_id),
+  CHECK (source = 'gig' OR (project_id IS NOT NULL AND proposal_id IS NOT NULL)),
   CHECK (released <= escrow_funded),
   CHECK (escrow_funded <= total_amount)
 );
@@ -101,11 +111,15 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_escrow_payments_open
 -- For every awarded project whose awarded proposal has no contract yet:
 --   * a 'fixed' contract for the sum of its (positive) milestone amounts, or the proposal
 --     price when it has none, as a single 'Full delivery' milestone;
---   * legacy milestone statuses mapped onto the new ones ('Disputed' → 'submitted';
---     the contract itself becomes 'disputed');
---   * escrow_funded / released derived from those statuses. NOTE: legacy "Funded" was a
---     status flip with no captured payment behind it, and no ledger rows are written here,
---     so migrated escrow totals must be reconciled before any real payout.
+--   * legacy milestone statuses: the old "Funded / Submitted / Revision requested /
+--     Accepted / Disputed" were status flips with no captured payment behind them, so
+--     they must NOT count as escrow (a buyer could otherwise "release" money that was
+--     never paid in). Only 'Released' maps to 'released' (historical, settled outside the
+--     platform); every other legacy status maps to 'pending' and needs a real payment.
+--     The old status is kept in submission_note as 'Legacy status: <old>' so the history
+--     is not lost. A project in stage 'Disputed' makes the contract 'disputed';
+--   * escrow_funded = released = the sum of the released milestones (no ledger rows are
+--     written here; those amounts were settled before this platform held escrow).
 -- Migrated contracts count as signed under the old flow (status 'active'), with null
 -- signatures; source = 'legacy_project' marks them.
 DO $$
@@ -157,28 +171,24 @@ BEGIN
       amt := (m->>'amount')::numeric;
       due := CASE WHEN jsonb_typeof(m->'dueDate') = 'number' AND (m->>'dueDate')::numeric > 0
                   THEN to_timestamp((m->>'dueDate')::numeric / 1000)::date END;
-      mstatus := CASE m->>'status'
-                   WHEN 'Funded' THEN 'funded'
-                   WHEN 'Submitted' THEN 'submitted'
-                   WHEN 'Disputed' THEN 'submitted'
-                   WHEN 'Revision requested' THEN 'revision_requested'
-                   WHEN 'Accepted' THEN 'accepted'
-                   WHEN 'Released' THEN 'released'
-                   ELSE 'pending' END;
-      INSERT INTO contract_milestones (contract_id, seq, title, amount, due_date, status, released_at)
+      mstatus := CASE WHEN m->>'status' = 'Released' THEN 'released' ELSE 'pending' END;
+      INSERT INTO contract_milestones (contract_id, seq, title, amount, due_date, status, released_at, submission_note)
       VALUES (cid, n, left(COALESCE(NULLIF(trim(m->>'name'), ''), 'Milestone ' || n), 200), amt, due, mstatus,
-              CASE WHEN mstatus = 'released' THEN NOW() END);
+              CASE WHEN mstatus = 'released' THEN NOW() END,
+              CASE WHEN mstatus = 'pending' AND COALESCE(NULLIF(trim(m->>'status'), ''), 'Pending') <> 'Pending'
+                   THEN 'Legacy status: ' || left(trim(m->>'status'), 100) END);
     END LOOP;
 
     IF n = 0 THEN
       INSERT INTO contract_milestones (contract_id, seq, title, amount) VALUES (cid, 1, 'Full delivery', total);
     END IF;
 
-    SELECT COALESCE(SUM(amount) FILTER (WHERE status IN ('funded', 'submitted', 'revision_requested', 'accepted', 'released')), 0),
-           COALESCE(SUM(amount) FILTER (WHERE status = 'released'), 0),
+    -- Only released milestones carry money; escrow_funded = released for migrated contracts.
+    SELECT COALESCE(SUM(amount) FILTER (WHERE status = 'released'), 0),
            COUNT(*) FILTER (WHERE status <> 'released')
-      INTO funded, rel, open_n
+      INTO rel, open_n
       FROM contract_milestones WHERE contract_id = cid;
+    funded := rel;
 
     UPDATE contracts
        SET escrow_funded = funded,

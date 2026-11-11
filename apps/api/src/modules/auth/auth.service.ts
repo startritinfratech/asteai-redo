@@ -66,9 +66,14 @@ export class AuthService {
    * Issues an access token and a single-use refresh token.
    * The refresh token is `<row id>.<secret>`: the id finds the row directly, so a
    * refresh costs one bcrypt compare instead of one per outstanding token.
+   *
+   * The access token carries `iatMs` (see JwtPayload). `notBefore` is a password change
+   * this token must postdate even if this server's clock lags the database's (the device
+   * that changed the password gets its new token straight away).
    */
-  async login(user: User, meta: SessionMeta = {}): Promise<AuthTokens> {
-    const payload: JwtPayload = { sub: user.id, role: user.role, tenantId: user.tenantId };
+  async login(user: User, meta: SessionMeta = {}, notBefore?: Date | null): Promise<AuthTokens> {
+    const iatMs = Math.max(Date.now(), notBefore ? new Date(notBefore).getTime() + 1 : 0);
+    const payload: JwtPayload = { sub: user.id, role: user.role, tenantId: user.tenantId, iatMs };
     const accessToken = this.jwtService.sign(payload);
 
     const secret = randomBytes(32).toString('base64url');

@@ -6,7 +6,9 @@ import type { User, UserRole } from '@asteai/types';
 import { DB_POOL, withTransaction } from '../../database/database.module';
 import { NotificationsService } from '../notifications/notifications.service';
 import { mapUserRow, USER_COLUMNS, UserRow } from '../users/user.mapper';
-import { ACCOUNT_ACTIVE_SQL, NOT_BLOCKED_SQL } from '../auth/account-status';
+import {
+  ACCOUNT_ACTIVE_SQL, NOT_BLOCKED_SQL, TokenIssueTimes, tokenIssueParams, tokenNotRevokedSql,
+} from '../auth/account-status';
 import {
   MESSAGE_MAX_LENGTH,
   type ChatMember, type ChatMessage, type ChatMessagePage, type ChatSummary, type ChatType, type SendMessageResult,
@@ -123,16 +125,17 @@ export class ChatsService {
 
   /**
    * Same lookup as the JWT strategy: the account must still be active (not deactivated or
-   * deleted), not banned or suspended, and the token (issued at `issuedAt`, seconds) must
-   * not predate the last password change or reset.
+   * deleted), not banned or suspended, and the token (its `iat` / `iatMs` claims) must not
+   * predate the last password change or reset.
    */
-  async loadActiveUser(userId: string, issuedAt = 0): Promise<User | null> {
+  async loadActiveUser(userId: string, token: TokenIssueTimes = {}): Promise<User | null> {
     const { rows } = await this.db.query<UserRow>(
       `SELECT ${USER_COLUMNS} FROM user_accounts
         WHERE id = $1 AND ${ACCOUNT_ACTIVE_SQL} AND ${NOT_BLOCKED_SQL}
-          AND (password_changed_at IS NULL OR date_trunc('second', password_changed_at) <= to_timestamp($2))`,
-      [userId, issuedAt],
+          AND ${tokenNotRevokedSql(2, 3)}`,
+      [userId, ...tokenIssueParams(token)],
     );
+
     return rows.length ? mapUserRow(rows[0]) : null;
   }
 
@@ -189,6 +192,15 @@ export class ChatsService {
       [me.id, other.id],
     );
     if (rows.length) return 'direct';
+    // The buyer and expert of a gig order (a contract with no project) may message each other.
+    const { rows: gig } = await this.db.query(
+      `SELECT 1 FROM contracts c
+        WHERE c.source = 'gig' AND c.status <> 'draft'
+          AND ((c.buyer_id = $1 AND c.expert_id = $2) OR (c.buyer_id = $2 AND c.expert_id = $1))
+        LIMIT 1`,
+      [me.id, other.id],
+    );
+    if (gig.length) return 'direct';
     throw new ForbiddenException('You can only message people you work with');
   }
 

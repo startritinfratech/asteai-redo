@@ -8,7 +8,7 @@ import { ChatsRealtime } from './chats.realtime';
 import { ChatsService, NOTIFY_WINDOW_MINUTES, pairKey } from './chats.service';
 import { CIRCUMVENTION_WARNING, detectCircumvention } from './circumvention';
 import { ChatsGateway, handshakeToken } from './chats.gateway';
-import { ACCOUNT_ACTIVE_SQL, NOT_BLOCKED_SQL } from '../auth/account-status';
+import { ACCOUNT_ACTIVE_SQL, NOT_BLOCKED_SQL, tokenNotRevokedSql } from '../auth/account-status';
 import type { JwtService } from '@nestjs/jwt';
 import type { ConfigService } from '@nestjs/config';
 
@@ -124,6 +124,26 @@ describe('ChatsService.startChat permissions', () => {
       .svc.startChat(buyer, FREELANCER, 'PRJ-X'), status(404));
     await assert.rejects(service([{ rows: [] }]).svc.startChat(buyer, FREELANCER), status(404));
     await assert.rejects(service([]).svc.startChat(buyer, BUYER), status(400));
+  });
+
+  it('lets the buyer and expert of a gig order (a contract with no project) message each other', async () => {
+    const { svc, db } = service([
+      { rows: [{ id: FREELANCER, role: 'Freelancer', tenant_id: null }] },
+      { rows: [] }, // no project in common
+      { rows: [{ '?column?': 1 }] }, // a gig contract between them
+      { rows: [{ id: CHAT }] }, { rows: [] }, { rows: [summaryRow({ type: 'direct', project_id: null })] },
+    ]);
+    const chat = await svc.startChat(buyer, FREELANCER);
+    assert.equal(chat.type, 'direct');
+    const gig = db.sql.findIndex((q) => /FROM contracts c/.test(q));
+    assert.match(db.sql[gig], /c\.source = 'gig'/);
+    assert.deepEqual(db.params[gig], [BUYER, FREELANCER]);
+  });
+
+  it('still refuses two people with no project and no gig order in common', async () => {
+    await assert.rejects(service([
+      { rows: [{ id: FREELANCER, role: 'Freelancer', tenant_id: null }] }, { rows: [] }, { rows: [] },
+    ]).svc.startChat(buyer, FREELANCER), status(403));
   });
 
   it('lets an employer message a candidate who applied to their tenant', async () => {
@@ -319,28 +339,34 @@ describe('ChatsService.loadActiveUser', () => {
 
   it('applies the JWT strategy rules: active, not blocked, token not older than the password', async () => {
     const { svc, db } = service([{ rows: [row] }]);
-    const found = await svc.loadActiveUser(BUYER, 1_800_000_000);
+    const found = await svc.loadActiveUser(BUYER, { iat: 1_800_000_000, iatMs: 1_800_000_000_123 });
     assert.equal(found?.id, BUYER);
     assert.ok(db.sql[0].includes(ACCOUNT_ACTIVE_SQL));
     assert.ok(db.sql[0].includes(NOT_BLOCKED_SQL));
-    assert.match(db.sql[0], /password_changed_at IS NULL OR date_trunc\('second', password_changed_at\) <= to_timestamp\(\$2\)/);
-    assert.deepEqual(db.params[0], [BUYER, 1_800_000_000]);
+    assert.ok(db.sql[0].includes(tokenNotRevokedSql(2, 3)));
+    assert.deepEqual(db.params[0], [BUYER, 1_800_000_000_123, 1_800_000_000]);
+  });
+
+  it('falls back to the whole-second rule for a token without iatMs', async () => {
+    const { svc, db } = service([{ rows: [row] }]);
+    await svc.loadActiveUser(BUYER, { iat: 1_800_000_000 });
+    assert.deepEqual(db.params[0], [BUYER, null, 1_800_000_000]);
   });
 
   it('returns null when no row matches (inactive, deleted, blocked or stale token)', async () => {
     const { svc } = service([{ rows: [] }]);
-    assert.equal(await svc.loadActiveUser(BUYER, 1), null);
+    assert.equal(await svc.loadActiveUser(BUYER, { iat: 1 }), null);
   });
 });
 
 describe('ChatsGateway.authenticate', () => {
   function gateway(payload: Record<string, unknown>, active: User | null) {
-    const lookups: [string, number | undefined][] = [];
+    const lookups: [string, unknown][] = [];
     const jwt = { verifyAsync: async () => payload } as unknown as JwtService;
     const config = { getOrThrow: () => 'secret' } as unknown as ConfigService;
     const chats = {
-      loadActiveUser: async (id: string, iat?: number) => {
-        lookups.push([id, iat]);
+      loadActiveUser: async (id: string, token?: { iat?: unknown; iatMs?: unknown }) => {
+        lookups.push([id, [token?.iat, token?.iatMs]]);
         return active;
       },
     } as unknown as ChatsService;
@@ -349,10 +375,11 @@ describe('ChatsGateway.authenticate', () => {
     return { gw, socket: socket as unknown as Parameters<ChatsGateway['authenticate']>[0], lookups };
   }
 
-  it('passes the token issue time to the user lookup', async () => {
-    const { gw, socket, lookups } = gateway({ sub: BUYER, role: 'Buyer', iat: 1_700_000_000 }, buyer);
+  it('passes the token issue times to the user lookup', async () => {
+    const { gw, socket, lookups } = gateway({ sub: BUYER, role: 'Buyer', iat: 1_700_000_000, iatMs: 1_700_000_000_250 }, buyer);
     await gw.authenticate(socket);
-    assert.deepEqual(lookups, [[BUYER, 1_700_000_000]]);
+    assert.deepEqual(lookups, [[BUYER, [1_700_000_000, 1_700_000_000_250]]]);
+
     assert.equal(socket.data.user.id, BUYER);
   });
 

@@ -1,5 +1,6 @@
 import { api } from '@/lib/api';
-import type { Contract, ContractSummary, CreateContractInput, FundMilestoneResult } from './types';
+import type { FundMilestoneCheckout, IssueRefundInput, IssueRefundResult } from '../payments/types';
+import type { Contract, ContractSummary, CreateContractInput } from './types';
 
 export const contractKey = (id: string) => `/contracts/${encodeURIComponent(id)}`;
 const ms = (id: string, mid: string, action: string) =>
@@ -11,9 +12,11 @@ export const contractsApi = {
   create: (input: CreateContractInput) => api.post<Contract>('/contracts', input),
   sign: (id: string, signatureName: string) => api.post<Contract>(`${contractKey(id)}/sign`, { signatureName }),
   decline: (id: string, reason?: string) => api.post<Contract>(`${contractKey(id)}/decline`, reason ? { reason } : {}),
-  cancel: (id: string, reason: string) =>
-    api.post<Contract & { refundDue: number }>(`${contractKey(id)}/cancel`, { reason }),
-  fund: (id: string, mid: string) => api.post<FundMilestoneResult>(ms(id, mid, 'fund')),
+  cancel: (id: string, reason: string) => api.post<Contract>(`${contractKey(id)}/cancel`, { reason }),
+  /** Opens (or reopens) the escrow payment and its Razorpay order; pay it with payWithRazorpay. */
+  fund: (id: string, mid: string) => api.post<FundMilestoneCheckout>(ms(id, mid, 'fund')),
+  /** Admin: refund (part of) the escrow due on a cancelled contract. */
+  refund: (id: string, input: IssueRefundInput) => api.post<IssueRefundResult>(`${contractKey(id)}/refund`, input),
   submit: (id: string, mid: string, note: string) => api.post<Contract>(ms(id, mid, 'submit'), { note }),
   requestRevision: (id: string, mid: string, note: string) =>
     api.post<Contract>(ms(id, mid, 'request-revision'), { note }),

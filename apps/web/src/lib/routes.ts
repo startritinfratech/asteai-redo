@@ -62,8 +62,11 @@ export const NAV: Record<UserRole, NavSection[]> = {
     ['Marketplace', [
       item('market', 'Find Projects'),
       item('proposals', 'My Proposals'),
+      item('my-services', 'My Services'),
+      item('orders', 'Orders'),
       item('contracts', 'Escrow Contracts'),
       item('wallet', 'Wallet'),
+      item('invoices', 'Invoices'),
       item('passport', 'Talent Passport'),
     ]],
     ['Account', [
@@ -78,8 +81,10 @@ export const NAV: Record<UserRole, NavSection[]> = {
       item('experts', 'Find Experts'),
       item('projects', 'My Projects'),
       item('services', 'Pre-Packaged Services'),
+      item('orders', 'Orders'),
       item('contracts', 'Escrow Contracts'),
       item('wallet', 'Wallet'),
+      item('invoices', 'Invoices'),
       item('disputes', 'Disputes'),
     ]],
     ['Account', [
@@ -95,6 +100,10 @@ export const NAV: Record<UserRole, NavSection[]> = {
       item('ai-interviews', 'AI Interviews'),
       item('assessment-sessions', 'Assessment Sessions'),
       item('expert-approvals', 'Expert Approvals'),
+      item('service-approvals', 'Service Approvals'),
+      item('payouts', 'Expert Payouts'),
+      item('payments', 'Unapplied Payments'),
+      item('invoices', 'Invoices'),
       item('tenants', 'Tenants & Plans'),
       item('integrity', 'Integrity Review'),
       item('trust', 'Trust & Safety'),
