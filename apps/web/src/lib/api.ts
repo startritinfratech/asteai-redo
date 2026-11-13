@@ -108,6 +108,8 @@ const PUBLIC_AUTH_PATHS = new Set([
   '/auth/password/forgot',
   '/auth/password/reset',
   '/auth/verify-email',
+  '/auth/email/send-otp',
+  '/auth/email/verify-otp',
 ]);
 
 /** Whether a 401 from `path` may be retried after refreshing the tokens (exact match, query ignored). */

@@ -6,10 +6,11 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { clsx } from 'clsx';
 import type { UserRole } from '@asteai/types';
 import { ApiError } from '@/lib/api';
-import { LOGIN_PATH, ROLE_HOME } from '@/lib/routes';
+import { LOGIN_PATH, ROLE_HOME, safeNext } from '@/lib/routes';
 import { useAuthHydrated, useAuthStore } from '@/store/auth';
 import { EMAIL_RE, PasswordInput, Spinner, authErrorMessage } from '../_components/shared';
 import styles from '../auth.module.css';
+import { EmailCodeStep } from './EmailCodeStep';
 
 /** The roles the API lets people self-register as (RegisterDto). Admin is never offered. */
 const ROLES = [
@@ -31,7 +32,9 @@ const ORDER: Field[] = ['firstName', 'lastName', 'email', 'password', 'role', 't
 
 export function RegisterForm() {
   const router = useRouter();
-  const roleParam = useSearchParams().get('role');
+  const params = useSearchParams();
+  const roleParam = params.get('role');
+  const next = safeNext(params.get('next'));
   const register = useAuthStore((s) => s.register);
   const user = useAuthStore((s) => s.user);
   const hydrated = useAuthHydrated();
@@ -41,6 +44,8 @@ export function RegisterForm() {
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
+  // Set once the email-code step succeeds; the details form only shows with a ticket.
+  const [ticket, setTicket] = useState<{ value: string; expiresAt: number } | null>(null);
   const [password, setPassword] = useState('');
   const [role, setRole] = useState<SelfRole | ''>(isSelfRole(roleParam) ? roleParam : '');
   const [terms, setTerms] = useState(false);
@@ -92,11 +97,16 @@ export function RegisterForm() {
         email: email.trim(),
         password,
         role,
+        otpTicket: ticket?.value,
       });
-      router.replace(ROLE_HOME[created.role]);
+      router.replace(next ?? ROLE_HOME[created.role]);
     } catch (err) {
       setPending(false);
       setEmailTaken(err instanceof ApiError && err.status === 409);
+      if (err instanceof ApiError && err.status === 400 && /verification has expired/i.test(err.message)) {
+        // The ticket ran out while the form was open: go back to the code step.
+        setTicket(null);
+      }
       setFormError(authErrorMessage(err, 'We couldn’t create your account. Please try again.'));
       requestAnimationFrame(() => formErrorRef.current?.focus());
     }
@@ -121,6 +131,16 @@ export function RegisterForm() {
         </p>
       )}
 
+      {!ticket ? (
+        <EmailCodeStep
+          initialEmail={email}
+          onVerified={(addr, value, expiresIn) => {
+            setEmail(addr);
+            setTicket({ value, expiresAt: Date.now() + expiresIn * 1000 });
+            setFormError('');
+          }}
+        />
+      ) : (
       <form className={styles.form} onSubmit={onSubmit} noValidate>
         {formError && (
           <div ref={formErrorRef} className={styles.alert} role="alert" tabIndex={-1}>
@@ -172,18 +192,18 @@ export function RegisterForm() {
             id={fid('email')}
             name="email"
             type="email"
-            inputMode="email"
             className={styles.input}
             value={email}
-            onChange={(e) => { setEmail(e.target.value); clear('email'); }}
+            readOnly
+            aria-describedby={`${fid('email')}-verified`}
             autoComplete="email"
-            autoCapitalize="none"
-            spellCheck={false}
-            aria-invalid={errors.email ? true : undefined}
-            aria-describedby={describe('email')}
-            required
           />
-          {fieldError('email')}
+          <p id={`${fid('email')}-verified`} className={styles.hint}>
+            ✓ Verified.{' '}
+            <button type="button" className={styles.reveal} style={{ position: 'static' }} onClick={() => setTicket(null)}>
+              Change email
+            </button>
+          </p>
         </div>
 
         <div className={styles.field}>
@@ -265,9 +285,10 @@ export function RegisterForm() {
           {pending ? 'Creating your account…' : 'Create account'}
         </button>
       </form>
+      )}
 
       <p className={styles.switch}>
-        Already have an account? <Link href={LOGIN_PATH}>Sign in</Link>
+        Already have an account? <Link href={next ? `${LOGIN_PATH}?next=${encodeURIComponent(next)}` : LOGIN_PATH}>Sign in</Link>
       </p>
     </div>
   );

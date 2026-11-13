@@ -6,6 +6,7 @@ import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { RequisitionsService } from './requisitions.service';
 import { CreateRequisitionDto } from './dto/create-requisition.dto';
 import { UpdateRequisitionDto } from './dto/update-requisition.dto';
+import { RequisitionPostingDto } from './dto/posting.dto';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { RolesGuard } from '../../common/guards/roles.guard';
@@ -55,6 +56,13 @@ export class RequisitionsController {
     @CurrentUser() user: User,
   ) {
     return this.svc.update(id, dto, user);
+  }
+
+  @Patch(':id/posting')
+  @Roles('Employer', 'Admin')
+  @ApiOperation({ summary: 'Publish to / hide from the public job board and set its pay, type and expiry' })
+  updatePosting(@Param('id') id: string, @Body() dto: RequisitionPostingDto, @CurrentUser() user: User) {
+    return this.svc.updatePosting(id, dto, user);
   }
 
   @Patch(':id/fund')

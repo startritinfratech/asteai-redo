@@ -1,9 +1,10 @@
-import { ConflictException, Injectable, Inject, NotFoundException, ForbiddenException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, Inject, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { Pool, type QueryResultRow } from 'pg';
 import { DB_POOL } from '../../database/database.module';
 import { assertTenantAccess } from '../../common/utils/access';
 import { CreateRequisitionDto } from './dto/create-requisition.dto';
 import { UpdateRequisitionDto } from './dto/update-requisition.dto';
+import { RequisitionPostingDto } from './dto/posting.dto';
 import { ReqStatus, Requisition, User } from '@asteai/types';
 import { generateId } from '../../common/utils/ids';
 import { Pagination } from '../../common/utils/pagination';
@@ -161,6 +162,44 @@ export class RequisitionsService {
     return this.mapRow(rows[0]);
   }
 
+  /**
+   * Public job-board settings. Owner or Admin only. Making it public the first time stamps
+   * published_at (the board's sort key); turning it off later keeps that date.
+   */
+  async updatePosting(id: string, dto: RequisitionPostingDto, user: User) {
+    const existing = await this.findOne(id, user);
+    if (existing.ownerId !== user.id && user.role !== 'Admin') {
+      throw new ForbiddenException('Only the owner can change how a requisition is posted');
+    }
+    const min = dto.salaryMin !== undefined ? dto.salaryMin : existing.posting?.salaryMin ?? null;
+    const max = dto.salaryMax !== undefined ? dto.salaryMax : existing.posting?.salaryMax ?? null;
+    if (min !== null && max !== null && min > max) throw new BadRequestException('salaryMin must not exceed salaryMax');
+    if (dto.expiresAt && new Date(dto.expiresAt) <= new Date()) throw new BadRequestException('expiresAt must be in the future');
+
+    const set = (key: keyof RequisitionPostingDto) => dto[key] !== undefined;
+    const { rows } = await this.db.query(
+      `UPDATE requisitions SET
+         is_public       = COALESCE($2, is_public),
+         published_at    = CASE WHEN COALESCE($2, is_public) THEN COALESCE(published_at, NOW()) ELSE published_at END,
+         employment_type = COALESCE($3, employment_type),
+         location_type   = COALESCE($4, location_type),
+         salary_min      = CASE WHEN $5 THEN $6::numeric ELSE salary_min END,
+         salary_max      = CASE WHEN $7 THEN $8::numeric ELSE salary_max END,
+         salary_currency = COALESCE($9, salary_currency),
+         requirements    = COALESCE($10::text[], requirements),
+         expires_at      = CASE WHEN $11 THEN $12::timestamptz ELSE expires_at END,
+         updated_at      = NOW()
+       WHERE id = $1
+       RETURNING *`,
+      [
+        id, dto.isPublic ?? null, dto.employmentType ?? null, dto.locationType ?? null,
+        set('salaryMin'), dto.salaryMin ?? null, set('salaryMax'), dto.salaryMax ?? null,
+        dto.salaryCurrency ?? null, dto.requirements ?? null, set('expiresAt'), dto.expiresAt ?? null,
+      ],
+    );
+    return this.mapRow({ ...rows[0], owner_name: existing.ownerName });
+  }
+
   private mapRow(row: QueryResultRow): Requisition {
     const iso = (v: unknown) => (v == null ? null : new Date(v as string).toISOString());
     return {
@@ -188,6 +227,20 @@ export class RequisitionsService {
       },
       stack:        row.stack ?? [],
       brief:        row.brief,
+      // Rows from before migration 018 have no posting columns.
+      ...(row.is_public === undefined ? {} : {
+        posting: {
+          isPublic:       Boolean(row.is_public),
+          employmentType: row.employment_type,
+          locationType:   row.location_type,
+          salaryMin:      row.salary_min == null ? null : Number(row.salary_min),
+          salaryMax:      row.salary_max == null ? null : Number(row.salary_max),
+          salaryCurrency: row.salary_currency,
+          requirements:   row.requirements ?? [],
+          expiresAt:      iso(row.expires_at),
+          publishedAt:    iso(row.published_at),
+        },
+      }),
       createdAt:    iso(row.created_at) ?? '',
       updatedAt:    iso(row.updated_at) ?? '',
     };

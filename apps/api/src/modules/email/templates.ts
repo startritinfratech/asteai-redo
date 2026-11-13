@@ -62,6 +62,31 @@ export interface TemplateData {
   'gig-auto-accepted': { firstName: string; serviceTitle: string; audience: 'buyer' | 'expert'; path: string };
   /** An admin resolved a dispute; `outcome` is a sentence describing what happened to the money. */
   'dispute-resolved': { firstName: string; disputeId: string; contractId: string; outcome: string; note: string; path: string };
+
+  // ── Public site ──
+  /** Sign-up one-time code. */
+  'signup-otp': { code: string; expiresInMinutes: number };
+  /** Someone asked for a sign-up code for an address that already has an account. */
+  'signup-account-exists': Record<string, never>;
+  /** Internal: a "Submit a requirement" lead, to the sales inbox. */
+  'lead-received': {
+    leadId: string; track: string; roleTitle: string; skills: string | null; workMode: string; timeline: string;
+    company: string; contactName: string; email: string; phone: string;
+  };
+  /** To the person who submitted a lead. */
+  'lead-ack': { contactName: string; roleTitle: string };
+  /** Internal: a contact / demo message, to the support inbox. */
+  'contact-received': { messageId: string; intent: 'contact' | 'demo'; name: string; email: string; subject: string; message: string };
+  /** To the person who sent a contact / demo message. */
+  'contact-ack': { name: string; intent: 'contact' | 'demo' };
+  /** Newsletter double opt-in; `path` is /newsletter/confirm?token=…, `unsubscribePath` /unsubscribe?token=… */
+  'newsletter-confirm': { path: string; unsubscribePath: string };
+  /** Internal: a careers application, to the hiring inbox. */
+  'career-application': { applicationId: string; roleTitle: string; fullName: string; email: string; profileUrl: string | null; message: string | null };
+  /** To the applicant. */
+  'career-ack': { fullName: string; roleTitle: string };
+  /** Support replied on a ticket. */
+  'support-reply': { firstName: string; ticketId: string; subject: string; path: string };
 }
 
 export type TemplateName = keyof TemplateData;
@@ -81,7 +106,17 @@ export function siteUrl(baseUrl: string, path: string): string {
   return /^\/(?!\/)/.test(path) ? `${base}${path}` : `${base}/`;
 }
 
-function layout(title: string, bodyHtml: string): string {
+const ACCOUNT_FOOTER = 'You are receiving this because you have an AsteAI account. This is a service message about your account.';
+const REQUEST_FOOTER = 'You are receiving this because this address was entered on an ASTEAI website form. If that wasn’t you, you can ignore this email.';
+const INTERNAL_FOOTER = 'Internal notification from the ASTEAI website. Treat the content as untrusted input from the public.';
+
+/** User-supplied text going into a subject line: one line, bounded. */
+export function oneLine(value: string, max = 80): string {
+  const flat = value.replace(/[\r\n\t]+/g, ' ').replace(/\s{2,}/g, ' ').trim();
+  return flat.length > max ? `${flat.slice(0, max - 1)}…` : flat;
+}
+
+function layout(title: string, bodyHtml: string, footer = ACCOUNT_FOOTER): string {
   return `<!doctype html>
 <html lang="en">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${escapeHtml(title)}</title></head>
@@ -89,7 +124,7 @@ function layout(title: string, bodyHtml: string): string {
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;margin:0 auto;background:#ffffff;border:1px solid #dcdcea;border-radius:12px;">
     <tr><td style="padding:20px 24px;border-bottom:1px solid #ececf5;font-weight:700;letter-spacing:.14em;">ASTEAI</td></tr>
     <tr><td style="padding:24px;font-size:15px;line-height:1.6;">${bodyHtml}</td></tr>
-    <tr><td style="padding:16px 24px;border-top:1px solid #ececf5;font-size:12px;color:#6b6e8a;">You are receiving this because you have an AsteAI account. This is a service message about your account.</td></tr>
+    <tr><td style="padding:16px 24px;border-top:1px solid #ececf5;font-size:12px;color:#6b6e8a;">${escapeHtml(footer)}</td></tr>
   </table>
 </body>
 </html>`;
@@ -102,6 +137,7 @@ function button(href: string, label: string): string {
 /** A simple notice: greeting, paragraphs, optional button and a fallback link. */
 function notice(
   subject: string, firstName: string, paragraphs: string[], baseUrl: string, link?: { path: string; label: string },
+  footer = ACCOUNT_FOOTER,
 ): RenderedEmail {
   const greeting = firstName ? `Hi ${firstName},` : 'Hi,';
   const url = link ? siteUrl(baseUrl, link.path) : null;
@@ -115,7 +151,7 @@ function notice(
   ].join('');
   const text = [greeting, '', ...paragraphs.flatMap((p) => [p, '']), ...(url && link ? [`${link.label}: ${url}`] : [])]
     .join('\n').trimEnd();
-  return { subject, html: layout(subject, html), text };
+  return { subject, html: layout(subject, html, footer), text };
 }
 
 const EXPERT_DECISION_COPY: Record<TemplateData['expert-profile-decision']['decision'], { subject: string; body: string }> = {
@@ -136,6 +172,9 @@ const EXPERT_DECISION_COPY: Record<TemplateData['expert-profile-decision']['deci
 const SECURITY_FOOTNOTE = 'If this wasn’t you, reset your password straight away and contact AsteAI support.';
 
 type Renderer<T> = (data: T, baseUrl: string) => RenderedEmail;
+
+const firstWord = (name: string) => name.trim().split(/\s+/)[0] ?? '';
+const TRACK_LABEL: Record<string, string> = { technical: 'Technical', professional: 'Professional', frontline: 'Frontline & skilled' };
 
 const TEMPLATES: { [K in TemplateName]: Renderer<TemplateData[K]> } = {
   'assessment-reset': ({ firstName, requisitionTitle, path }, baseUrl) => {
@@ -326,6 +365,96 @@ const TEMPLATES: { [K in TemplateName]: Renderer<TemplateData[K]> } = {
     ],
     baseUrl,
     { path, label: 'Open the dispute' },
+  ),
+
+  'signup-otp': ({ code, expiresInMinutes }, baseUrl) => notice(
+    `${code} is your ASTEAI verification code`,
+    '',
+    [
+      `Your ASTEAI verification code is ${code}.`,
+      `It expires in ${expiresInMinutes} minutes. If you didn’t try to create an ASTEAI account, you can ignore this email.`,
+    ],
+    baseUrl, undefined, REQUEST_FOOTER,
+  ),
+
+  'signup-account-exists': (_d, baseUrl) => notice(
+    'You already have an ASTEAI account',
+    '',
+    [
+      'Someone (hopefully you) asked to create an ASTEAI account with this email address, but an account already exists for it.',
+      'Sign in instead, or reset your password if you have forgotten it. If this wasn\u2019t you, you can ignore this email.',
+    ],
+    baseUrl, { path: '/auth/login', label: 'Sign in' }, REQUEST_FOOTER,
+  ),
+
+  'lead-received': (d, baseUrl) => notice(
+    `New requirement: ${oneLine(d.roleTitle)} at ${oneLine(d.company, 60)}`,
+    '',
+    [
+      `Lead ${d.leadId} (${TRACK_LABEL[d.track] ?? d.track} track).`,
+      `Role: ${d.roleTitle}. Work mode: ${d.workMode}. Timeline: ${d.timeline}.`,
+      `Contact: ${d.contactName}, ${d.email}, ${d.phone}. Company: ${d.company}.`,
+      ...(d.skills ? [`Requirements: ${d.skills}`] : []),
+    ],
+    baseUrl, undefined, INTERNAL_FOOTER,
+  ),
+
+  'lead-ack': ({ contactName, roleTitle }, baseUrl) => notice(
+    'We received your hiring requirement',
+    firstWord(contactName),
+    [`Thanks for telling us about your ${roleTitle} requirement. A member of our team will contact you within one business day to confirm the brief and next steps.`],
+    baseUrl, { path: '/how-it-works', label: 'See how delivery works' }, REQUEST_FOOTER,
+  ),
+
+  'contact-received': (d, baseUrl) => notice(
+    `${d.intent === 'demo' ? 'Demo request' : 'Contact'}: ${oneLine(d.subject)}`,
+    '',
+    [`Message ${d.messageId} from ${d.name} <${d.email}>.`, `Subject: ${d.subject}`, d.message],
+    baseUrl, undefined, INTERNAL_FOOTER,
+  ),
+
+  'contact-ack': ({ name, intent }, baseUrl) => notice(
+    intent === 'demo' ? 'We received your demo request' : 'We received your message',
+    firstWord(name),
+    [intent === 'demo'
+      ? 'Thanks for your interest in ASTEAI. We’ll be in touch shortly to schedule your demo.'
+      : 'Thanks for contacting ASTEAI. We usually reply within one business day.'],
+    baseUrl, undefined, REQUEST_FOOTER,
+  ),
+
+  'newsletter-confirm': ({ path, unsubscribePath }, baseUrl) => notice(
+    'Confirm your ASTEAI newsletter subscription',
+    '',
+    [
+      'Please confirm that you want to receive the ASTEAI newsletter. The link expires in 7 days.',
+      `Changed your mind? You can unsubscribe at any time: ${siteUrl(baseUrl, unsubscribePath)}`,
+    ],
+    baseUrl, { path, label: 'Confirm subscription' }, REQUEST_FOOTER,
+  ),
+
+  'career-application': (d, baseUrl) => notice(
+    `Application: ${oneLine(d.roleTitle, 60)} from ${oneLine(d.fullName, 60)}`,
+    '',
+    [
+      `Application ${d.applicationId} for ${d.roleTitle}.`,
+      `From: ${d.fullName} <${d.email}>${d.profileUrl ? `, ${d.profileUrl}` : ''}.`,
+      ...(d.message ? [d.message] : []),
+    ],
+    baseUrl, undefined, INTERNAL_FOOTER,
+  ),
+
+  'career-ack': ({ fullName, roleTitle }, baseUrl) => notice(
+    `We received your application for ${oneLine(roleTitle, 60)}`,
+    firstWord(fullName),
+    [`Thanks for applying to the ${roleTitle} role at ASTEAI. We review every application and will reply within two weeks.`],
+    baseUrl, undefined, REQUEST_FOOTER,
+  ),
+
+  'support-reply': ({ firstName, ticketId, subject, path }, baseUrl) => notice(
+    `Support replied: ${oneLine(subject)} [${ticketId}]`,
+    firstName,
+    [`The ASTEAI support team replied to your ticket ${ticketId} ("${subject}").`],
+    baseUrl, { path, label: 'Read the reply' },
   ),
 
   'dispute-resolved': ({ firstName, disputeId, contractId, outcome, note, path }, baseUrl) => notice(

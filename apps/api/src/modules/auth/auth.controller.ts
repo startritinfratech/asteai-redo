@@ -11,6 +11,8 @@ import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { LogoutDto } from './dto/logout.dto';
+import { SendOtpDto, VerifyOtpDto } from './dto/signup-otp.dto';
+import { SignupOtpService } from './signup-otp.service';
 import { OptionalJwtGuard } from './optional-jwt.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { User } from '@asteai/types';
@@ -21,6 +23,7 @@ export class AuthController {
   constructor(
     private readonly auth: AuthService,
     private readonly twoFactor: TwoFactorService,
+    private readonly signupOtp: SignupOtpService,
   ) {}
 
   @Post('register')
@@ -28,6 +31,22 @@ export class AuthController {
   @Throttle({ short: { ttl: 60_000, limit: 5 } })
   async register(@Body() dto: RegisterDto, @Req() req: Request) {
     return this.auth.register(dto, sessionMetaFrom(req));
+  }
+
+  @Post('email/send-otp')
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ short: { ttl: 60_000, limit: 5 } })
+  @ApiOperation({ summary: 'Email a 6-digit sign-up code (same answer whether or not the address is registered)' })
+  sendOtp(@Body() dto: SendOtpDto, @Req() req: Request) {
+    return this.signupOtp.send(dto.email, dto, req.ip ?? null);
+  }
+
+  @Post('email/verify-otp')
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ short: { ttl: 60_000, limit: 10 } })
+  @ApiOperation({ summary: 'Check a sign-up code; returns the otpTicket POST /auth/register accepts' })
+  verifyOtp(@Body() dto: VerifyOtpDto) {
+    return this.signupOtp.verify(dto.email, dto.code);
   }
 
   @Post('login')

@@ -1,6 +1,8 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { PageHero, PageShell } from '../PageShell';
+import { JsonLd } from '../JsonLd';
+import { breadcrumbLd } from '../structuredData';
 import marketing from '../marketing.module.css';
 import { LEGAL_SOURCES } from './content';
 import { getLegalDoc, LEGAL_DOCS, type LegalSlug } from './documents';
@@ -27,6 +29,7 @@ export function LegalDocument({ slug }: { slug: LegalSlug }) {
 
   return (
     <PageShell>
+      <JsonLd data={breadcrumbLd([{ name: 'Legal', path: '/legal' }, { name: doc.navLabel, path: `/legal/${slug}` }])} />
       <PageHero
         eyebrow="Legal"
         title={doc.title}

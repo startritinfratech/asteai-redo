@@ -1,4 +1,6 @@
 import type { Metadata } from 'next';
+import { JsonLd } from '@/features/marketing/JsonLd';
+import { faqLd } from '@/features/marketing/structuredData';
 import { PageHero, PageShell } from '@/features/marketing/PageShell';
 import { PrimaryCta } from '@/features/marketing/AuthAwareActions';
 import { Bullets } from '@/features/marketing/sections';
@@ -212,6 +214,7 @@ function CostCard({ title, rows }: { title: string; rows: readonly (readonly [st
 export default function HowItWorksPage() {
   return (
     <PageShell>
+      <JsonLd data={faqLd(FAQS)} />
       <PageHero eyebrow="Platform Guide" title="How It Works">
         Asteai Deeptech connects expert freelancers with buyers seeking specialized technical expertise. Whether
         you&apos;re hiring or offering your skills, here&apos;s how the platform works.

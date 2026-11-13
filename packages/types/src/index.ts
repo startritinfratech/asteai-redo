@@ -82,8 +82,24 @@ export interface Requisition {
   sla: SlaConfig;
   stack: string[];
   brief: string | null;
+  /** Public job-board settings (PATCH /requisitions/:id/posting). */
+  posting?: RequisitionPosting;
   createdAt: string;
   updatedAt: string;
+}
+
+/** How a requisition appears on the public job board; shown only while it is Open. */
+export interface RequisitionPosting {
+  isPublic: boolean;
+  employmentType: 'full_time' | 'part_time' | 'contract' | 'internship';
+  locationType: 'onsite' | 'remote' | 'hybrid';
+  salaryMin: number | null;
+  salaryMax: number | null;
+  salaryCurrency: string;
+  requirements: string[];
+  expiresAt: string | null;
+  /** First time it was made public; the board orders by this. */
+  publishedAt: string | null;
 }
 
 export const APPLICATION_STAGES = [
@@ -463,3 +479,4 @@ export * from './payment';
 export * from './billing';
 export * from './dispute';
 export * from './gig';
+export * from './public';

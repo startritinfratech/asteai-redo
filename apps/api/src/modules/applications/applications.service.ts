@@ -54,8 +54,9 @@ export class ApplicationsService {
   }
 
   async apply(reqId: string, candidateId: string) {
+    // An expired public posting no longer takes applications (the board already hides it).
     const { rows: reqRows } = await this.db.query<{ tenant_id: string; status: string }>(
-      `SELECT tenant_id, status FROM requisitions WHERE id = $1`,
+      `SELECT tenant_id, status FROM requisitions WHERE id = $1 AND (expires_at IS NULL OR expires_at > NOW())`,
       [reqId],
     );
     if (!reqRows.length || reqRows[0].status !== 'Open') {

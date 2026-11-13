@@ -28,7 +28,7 @@ function fakePool(replies: { rows: unknown[] }[]) {
 }
 
 const svcFor = (pool: Pool) => new AuthService(pool, {} as JwtService, {} as ConfigService, {} as EmailService);
-const controllerFor = (pool: Pool) => new AuthController(svcFor(pool), {} as TwoFactorService);
+const controllerFor = (pool: Pool) => new AuthController(svcFor(pool), {} as TwoFactorService, {} as never);
 
 describe('isBlocked', () => {
   const base = { is_banned: false, is_suspended: false, suspended_until: null };

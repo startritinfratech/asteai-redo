@@ -80,21 +80,21 @@
   border-color: var(--blue);
   color: #fff;
 }
-.btnPrimary:hover { background: var(--blue-2); border-color: var(--blue-2); color: var(--bg); }
+.btnPrimary:hover { background: var(--blue-hover); border-color: var(--blue-hover); color: var(--on-accent); }
 .btnGhost { border-color: transparent; }
 .btnGhost:hover { background: var(--bg-3); border-color: transparent; }
 .btnSm { min-height: 38px; padding: 8px 14px; font-size: .86rem; }
 
 /* ── Header ────────────────────────────────────────────────────────────────── */
 .header {
-  position: sticky;
+  position: sticky; /* also the anchor for the mega-menu panels */
   top: 0;
   z-index: 50;
-  background: rgba(3, 1, 10, .86);
+  background: var(--header-bg);
   border-bottom: 1px solid var(--line);
 }
 @supports (backdrop-filter: blur(8px)) {
-  .header { background: rgba(3, 1, 10, .72); backdrop-filter: blur(12px); }
+  .header { background: var(--header-bg-blur); backdrop-filter: blur(12px); }
 }
 .headerInner {
   display: flex;
@@ -103,35 +103,20 @@
   gap: 12px;
   height: 64px;
 }
-.nav { display: none; }
-.navList {
-  display: flex;
-  gap: 4px;
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-.navLink {
-  display: inline-block;
-  padding: 8px 12px;
-  border-radius: 8px;
-  color: var(--fg-2);
-  font-weight: 600;
-  font-size: .9rem;
-  text-decoration: none;
-}
-.navLink:hover { color: var(--fg); background: var(--bg-3); }
 .headerActions {
   display: flex;
   align-items: center;
   gap: 6px;
 }
-/* Five links plus the account actions need ~1000px; below that the footer carries them. */
+/* Theme toggle sits in the bar from 1040px; below that it lives in the drawer. */
+.desktopOnly { display: none; }
 @media (min-width: 1040px) {
-  .nav { display: block; }
+  .desktopOnly { display: inline-flex; }
 }
-@media (max-width: 380px) {
-  .headerActions .btn { padding-inline: 11px; }
+/* On phones the drawer carries the account actions; keep the bar to logo + menu button. */
+.accountActions { display: none; align-items: center; gap: 6px; }
+@media (min-width: 560px) {
+  .accountActions { display: inline-flex; }
 }
 
 /* ── Sections ──────────────────────────────────────────────────────────────── */
@@ -179,8 +164,8 @@
   inset: 0;
   z-index: -1;
   background:
-    radial-gradient(60% 50% at 15% 0%, rgba(77, 139, 255, .18), transparent 70%),
-    radial-gradient(40% 40% at 90% 20%, rgba(124, 92, 255, .14), transparent 70%);
+    radial-gradient(60% 50% at 15% 0%, var(--glow-blue), transparent 70%),
+    radial-gradient(40% 40% at 90% 20%, var(--glow-violet), transparent 70%);
   pointer-events: none;
 }
 .heroGrid {
@@ -199,7 +184,7 @@
   margin-bottom: 20px;
 }
 .accent {
-  background: linear-gradient(90deg, var(--blue-2), #A98BFF);
+  background: linear-gradient(90deg, var(--blue-2), var(--violet));
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
@@ -237,7 +222,7 @@
   border-radius: 18px;
   border: 1px solid var(--line-2);
   background: linear-gradient(160deg, var(--bg-3), var(--bg-2) 60%);
-  box-shadow: 0 24px 64px rgba(0, 0, 0, .45), inset 0 1px 0 rgba(255, 255, 255, .04);
+  box-shadow: var(--shadow-lg);
   min-width: 0;
 }
 .passportTop {
@@ -481,7 +466,7 @@
   border-radius: 24px;
   border: 1px solid var(--line-2);
   background:
-    radial-gradient(80% 120% at 50% 0%, rgba(77, 139, 255, .16), transparent 70%),
+    radial-gradient(80% 120% at 50% 0%, var(--glow-blue), transparent 70%),
     var(--bg-2);
   text-align: center;
 }
@@ -507,7 +492,7 @@
   .footerBrand { grid-column: 1 / -1; }
 }
 @media (min-width: 960px) {
-  .footerGrid { grid-template-columns: 1.4fr repeat(4, minmax(0, 1fr)); }
+  .footerGrid { grid-template-columns: 1.6fr repeat(3, minmax(0, 1fr)); }
   .footerBrand { grid-column: auto; }
 }
 .footerLegal {
@@ -552,6 +537,32 @@
   font-size: .84rem;
 }
 
+/* Footer socials + certification badge */
+.socials { display: flex; flex-wrap: wrap; gap: 6px; margin: 16px 0 0; padding: 0; list-style: none; }
+.social {
+  display: inline-grid; place-items: center;
+  width: 40px; height: 40px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-pill);
+  color: var(--fg-2);
+}
+.social:hover { color: var(--fg); background: var(--bg-3); }
+.isoBadge {
+  display: inline-flex; align-items: center; gap: 6px;
+  margin-top: 16px;
+  min-height: 36px;
+  padding: 6px 12px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-pill);
+  background: transparent;
+  color: var(--mint);
+  font-family: var(--font-mono);
+  font-size: .78rem;
+  font-weight: 600;
+  letter-spacing: .06em;
+}
+.isoBadge:hover { background: var(--mint-soft); }
+
 @media (prefers-reduced-motion: reduce) {
-  .btn, .navLink { transition: none; }
+  .btn { transition: none; }
 }

@@ -34,6 +34,11 @@ import { InvoicesModule } from './modules/invoices/invoices.module';
 import { PayoutsModule } from './modules/payouts/payouts.module';
 import { DisputesModule } from './modules/disputes/disputes.module';
 import { GigsModule } from './modules/gigs/gigs.module';
+import { SecurityModule } from './common/security/security.module';
+import { MarketingModule } from './modules/marketing/marketing.module';
+import { PublicModule } from './modules/public/public.module';
+import { ProductsModule } from './modules/products/products.module';
+import { SupportModule } from './modules/support/support.module';
 
 @Module({
   imports: [
@@ -74,6 +79,11 @@ import { GigsModule } from './modules/gigs/gigs.module';
     PayoutsModule,
     DisputesModule,
     GigsModule,
+    SecurityModule,
+    MarketingModule,
+    PublicModule,
+    ProductsModule,
+    SupportModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },

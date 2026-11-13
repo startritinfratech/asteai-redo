@@ -41,7 +41,16 @@ async function bootstrap() {
   if (trustProxy > 0) (app as NestExpressApplication).set('trust proxy', trustProxy);
 
   // ── Security middleware ──────────────────────────────────────────────────
-  app.use(helmet());
+  // Helmet's default CSP stays (it covers the Swagger UI page); the rest is set explicitly.
+  // CORP same-site: the web app (asteai.com / localhost:3000) and API (api.asteai.com /
+  // localhost:3001) are the same site, so it can read responses; other sites can't embed them.
+  app.use(helmet({
+    hsts: { maxAge: 63_072_000, includeSubDomains: true, preload: true },
+    frameguard: { action: 'deny' },
+    referrerPolicy: { policy: 'no-referrer' },
+    crossOriginResourcePolicy: { policy: 'same-site' },
+  }));
+  (app as NestExpressApplication).disable('x-powered-by');
   app.use(compression());
   app.use(cookieParser());
   app.enableCors({

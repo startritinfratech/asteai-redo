@@ -1,16 +1,19 @@
 import Link from 'next/link';
-import { LOGIN_PATH } from '@/lib/routes';
-import { REGISTER_PATH } from './AuthAwareActions';
+import { SOCIAL_LINKS, type SocialId } from '@/lib/site';
+import { NewsletterForm } from '../public-forms/NewsletterForm';
+import { IsoBadge } from './IsoBadge';
 import { LEGAL_DOCS } from './legal/documents';
 import { Logo } from './Logo';
-import { PAGE_LINKS, SECTION_LINKS } from './SiteHeader';
+import { FOOTER_COLUMNS } from './nav';
 import styles from './marketing.module.css';
 
-const COMPANY_LINKS = [
-  { href: '/about', label: 'About us' },
-  { href: '/contact', label: 'Contact' },
-  { href: '/legal', label: 'Legal' },
-] as const;
+const SOCIAL_ICON: Record<SocialId, string> = {
+  x: 'M4 4l16 16M20 4L4 20',
+  linkedin: 'M6 9v9M6 5.5v.5M10 18v-5a3 3 0 0 1 6 0v5M10 9v9',
+  instagram: 'M7 3h10a4 4 0 0 1 4 4v10a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V7a4 4 0 0 1 4-4zM12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7zM17.5 6.5v.01',
+  facebook: 'M14 8h3V4h-3a4 4 0 0 0-4 4v3H7v4h3v6h4v-6h3l1-4h-4V8z',
+  youtube: 'M3 8a3 3 0 0 1 3-3h12a3 3 0 0 1 3 3v8a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3V8zM10 9v6l5-3-5-3z',
+};
 
 export function SiteFooter() {
   return (
@@ -20,56 +23,36 @@ export function SiteFooter() {
           <div className={styles.footerBrand}>
             <Logo />
             <p className={styles.footerTagline}>
-              Hiring and expert work, decided on evidence: AI interviews, server-scored assessments, verifiable
-              Talent Passports and escrow-protected projects.
+              Hiring, delivered. AI interviews, server-scored assessments, verifiable Talent Passports and
+              escrow-protected projects.
             </p>
+            <ul className={styles.socials} aria-label="ASTEAI on social media">
+              {SOCIAL_LINKS.map((s) => (
+                <li key={s.id}>
+                  <a href={s.href} className={styles.social} target="_blank" rel="noopener noreferrer" aria-label={s.label}>
+                    <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
+                      <path d={SOCIAL_ICON[s.id]} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </a>
+                </li>
+              ))}
+            </ul>
+            <NewsletterForm />
+            <IsoBadge />
           </div>
 
-          <nav aria-labelledby="footer-product">
-            <h2 id="footer-product" className={styles.footerHeading}>Product</h2>
-            <ul className={styles.footerList}>
-              {PAGE_LINKS.map((l) => (
-                <li key={l.href}>
-                  <Link href={l.href} className={styles.footerLink}>{l.label}</Link>
-                </li>
-              ))}
-              {SECTION_LINKS.map((l) => (
-                <li key={l.href}>
-                  <a href={l.href} className={styles.footerLink}>{l.label}</a>
-                </li>
-              ))}
-            </ul>
-          </nav>
-
-          <nav aria-labelledby="footer-company">
-            <h2 id="footer-company" className={styles.footerHeading}>Company</h2>
-            <ul className={styles.footerList}>
-              {COMPANY_LINKS.map((l) => (
-                <li key={l.href}>
-                  <Link href={l.href} className={styles.footerLink}>{l.label}</Link>
-                </li>
-              ))}
-            </ul>
-          </nav>
-
-          <nav aria-labelledby="footer-join">
-            <h2 id="footer-join" className={styles.footerHeading}>Join</h2>
-            <ul className={styles.footerList}>
-              <li><Link href={`${REGISTER_PATH}?role=Employer`} className={styles.footerLink}>Hire talent</Link></li>
-              <li><Link href={`${REGISTER_PATH}?role=Candidate`} className={styles.footerLink}>Get certified</Link></li>
-              <li><Link href={`${REGISTER_PATH}?role=Freelancer`} className={styles.footerLink}>Work as an expert</Link></li>
-              <li><Link href={`${REGISTER_PATH}?role=Buyer`} className={styles.footerLink}>Buy expertise</Link></li>
-            </ul>
-          </nav>
-
-          <nav aria-labelledby="footer-account">
-            <h2 id="footer-account" className={styles.footerHeading}>Account</h2>
-            <ul className={styles.footerList}>
-              <li><Link href={LOGIN_PATH} className={styles.footerLink}>Sign in</Link></li>
-              <li><Link href={REGISTER_PATH} className={styles.footerLink}>Create an account</Link></li>
-              <li><a href="/#passport" className={styles.footerLink}>Verify a certificate</a></li>
-            </ul>
-          </nav>
+          {FOOTER_COLUMNS.map((col) => (
+            <nav key={col.id} aria-labelledby={`footer-${col.id}`}>
+              <h2 id={`footer-${col.id}`} className={styles.footerHeading}>{col.heading}</h2>
+              <ul className={styles.footerList}>
+                {col.links.map((l) => (
+                  <li key={l.href + l.label}>
+                    <Link href={l.href} className={styles.footerLink}>{l.label}</Link>
+                  </li>
+                ))}
+              </ul>
+            </nav>
+          ))}
         </div>
 
         <nav aria-labelledby="footer-legal" className={styles.footerLegal}>
@@ -80,10 +63,11 @@ export function SiteFooter() {
                 <Link href={`/legal/${d.slug}`} className={styles.footerLink}>{d.navLabel}</Link>
               </li>
             ))}
+            <li><Link href="/consent-preferences" className={styles.footerLink}>Consent preferences</Link></li>
           </ul>
         </nav>
 
-        <p className={styles.footerBottom}>© {new Date().getFullYear()} AsteAI. All rights reserved.</p>
+        <p className={styles.footerBottom}>© {new Date().getFullYear()} ASTEAI. All rights reserved.</p>
       </div>
     </footer>
   );

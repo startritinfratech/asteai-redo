@@ -20,6 +20,8 @@ export interface RegisterPayload {
   firstName: string;
   lastName: string;
   role?: UserRole;
+  /** From POST /auth/email/verify-otp: proves the address, so the account starts verified. */
+  otpTicket?: string;
 }
 
 interface AuthState {

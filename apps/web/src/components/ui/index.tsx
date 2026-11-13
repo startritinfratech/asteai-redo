@@ -5,6 +5,7 @@
 import React from 'react';
 import { clsx } from 'clsx';
 import styles from './ui.module.css';
+import kit from './kit.module.css';
 
 // ── Panel ────────────────────────────────────────────────────────────────────
 export function Panel({
@@ -196,3 +197,49 @@ export function CertCard({ children }: { children: React.ReactNode }) {
 export function Hash({ children }: { children: React.ReactNode }) {
   return <span className={styles.hash}>{children}</span>;
 }
+
+// ── Stepper ───────────────────────────────────────────────────────────────────
+/** Ordered progress through a multi-step form; the current step carries aria-current. */
+export function Stepper({ steps, current }: { steps: readonly string[]; current: number }) {
+  return (
+    <ol className={kit.stepper} aria-label="Progress">
+      {steps.map((s, i) => (
+        <li
+          key={s}
+          className={clsx(kit.step, i < current && kit.stepDone, i === current && kit.stepOn)}
+          aria-current={i === current ? 'step' : undefined}
+        >
+          <span className={kit.stepNum} aria-hidden="true">{i < current ? '✓' : i + 1}</span>
+          <span>{s}</span>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+// ── Skeleton ──────────────────────────────────────────────────────────────────
+export function Skeleton({ width, height = 16, radius, className }: {
+  width?: number | string; height?: number | string; radius?: number | string; className?: string;
+}) {
+  return <span aria-hidden="true" className={clsx(kit.skeleton, className)} style={{ width, height, borderRadius: radius }} />;
+}
+
+// ── Empty state (richer than Empty) ───────────────────────────────────────────
+export function EmptyState({ title, children, action, icon }: {
+  title: string; children?: React.ReactNode; action?: React.ReactNode; icon?: React.ReactNode;
+}) {
+  return (
+    <div className={kit.emptyState}>
+      {icon && <div className={kit.emptyIcon} aria-hidden="true">{icon}</div>}
+      <h3 className={kit.emptyTitle}>{title}</h3>
+      {children && <p className={kit.emptyBody}>{children}</p>}
+      {action && <div className={kit.emptyAction}>{action}</div>}
+    </div>
+  );
+}
+
+export {
+  Accordion, Dialog, Honeypot, OtpInput, PasswordField, Tabs, ThemeToggle, ToastProvider, useToast,
+  DEFAULT_PASSWORD_RULES, passwordMeetsRules,
+} from './kit';
+export type { AccordionItem, DialogProps, PasswordRule, TabItem } from './kit';

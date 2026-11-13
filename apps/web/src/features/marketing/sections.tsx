@@ -1,11 +1,12 @@
 /**
- * Landing page sections. All static Server Components; the only client pieces are the
- * auth-aware CTAs and the certificate lookup form.
+ * Landing page sections. All static Server Components; the client pieces are the
+ * auth-aware CTAs, the requirement dialog and the certificate lookup form.
  */
 import Link from 'next/link';
 import { clsx } from 'clsx';
 import { PrimaryCta, REGISTER_PATH } from './AuthAwareActions';
 import { VerifyCertificateForm } from './VerifyCertificateForm';
+import { RequirementCta } from '../public-forms/RequirementDialog';
 import styles from './marketing.module.css';
 
 // ── Icons (decorative; always aria-hidden) ───────────────────────────────────
@@ -98,7 +99,7 @@ export function Hero() {
           </p>
           <div className={styles.ctaRow}>
             <PrimaryCta label="Get started" />
-            <a href="#assessments" className={styles.btn}>How assessments work</a>
+            <RequirementCta autoOpen className={styles.btn} />
           </div>
           <ul className={styles.points}>
             <li><Icon name="check" size={16} className={styles.check} />Scored on the server</li>
@@ -407,7 +408,7 @@ export function FinalCta() {
           </p>
           <div className={styles.ctaRow}>
             <PrimaryCta label="Create your account" />
-            <a href="#journeys" className={styles.btn}>Compare the journeys</a>
+            <RequirementCta label="Hiring? Submit a requirement" className={styles.btn} />
           </div>
         </div>
       </div>

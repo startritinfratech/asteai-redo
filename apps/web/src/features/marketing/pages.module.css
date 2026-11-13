@@ -14,7 +14,7 @@
   position: absolute;
   inset: 0;
   z-index: -1;
-  background: radial-gradient(55% 80% at 10% 0%, rgba(77, 139, 255, .14), transparent 70%);
+  background: radial-gradient(55% 80% at 10% 0%, var(--glow-blue), transparent 70%);
   pointer-events: none;
 }
 @media (min-width: 900px) {
@@ -120,7 +120,7 @@
 }
 .planPopular {
   border-color: var(--blue);
-  background: linear-gradient(170deg, rgba(77, 139, 255, .10), var(--bg-2) 45%);
+  background: linear-gradient(170deg, var(--blue-soft), var(--bg-2) 45%);
 }
 .planHead {
   display: flex;

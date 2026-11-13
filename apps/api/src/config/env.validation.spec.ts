@@ -66,7 +66,15 @@ describe('validateEnv', () => {
     assert.throws(() => validateEnv({ ...base, NODE_ENV: 'production', TOTP_ENCRYPTION_KEY: '' }), /TOTP_ENCRYPTION_KEY/);
     assert.doesNotThrow(() => validateEnv({
       ...base, NODE_ENV: 'production', TOTP_ENCRYPTION_KEY: 'k'.repeat(32), PAYOUT_ENCRYPTION_KEY: 'p'.repeat(32),
+      TURNSTILE_SECRET_KEY: '0x4AAAAAAAtest-secret',
     }));
+  });
+
+  it('requires TURNSTILE_SECRET_KEY in production only', () => {
+    const prod = { ...base, NODE_ENV: 'production', TOTP_ENCRYPTION_KEY: 'k'.repeat(32), PAYOUT_ENCRYPTION_KEY: 'p'.repeat(32) };
+    assert.throws(() => validateEnv(prod), /TURNSTILE_SECRET_KEY is required in production/);
+    assert.doesNotThrow(() => validateEnv(base));
+    assert.throws(() => validateEnv({ ...base, SIGNUP_REQUIRE_OTP: 'yes' }), /SIGNUP_REQUIRE_OTP/);
   });
 
   it('requires a distinct PAYOUT_ENCRYPTION_KEY in production', () => {

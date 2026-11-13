@@ -18,7 +18,7 @@ interface Verification {
   verifiedAt?: string;
 }
 
-export default function VerifyCertificatePage() {
+export function VerifyCertificate() {
   const { id } = useParams<{ id: string }>();
   const { data, error, isLoading } = useSWR(id ? `/certificates/verify/${id}` : null, (url: string) =>
     api.get<Verification>(url),

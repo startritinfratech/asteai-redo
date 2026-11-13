@@ -111,6 +111,22 @@ class EnvironmentVariables {
   RAZORPAY_KEY_SECRET?: string;
 
   @IsOptional() @IsString() @MinLength(8) RAZORPAY_WEBHOOK_SECRET?: string;
+
+  // ── Public forms ──
+  /**
+   * Cloudflare Turnstile secret for the public forms and sign-up codes. Required in
+   * production; unset in development, the check is skipped (with a warning at boot).
+   */
+  @ValidateIf((env: EnvironmentVariables) => env.NODE_ENV === 'production' || env.TURNSTILE_SECRET_KEY !== undefined)
+  @IsString({ message: 'TURNSTILE_SECRET_KEY is required in production' }) @MinLength(10)
+  TURNSTILE_SECRET_KEY?: string;
+
+  /** true: POST /auth/register requires an otpTicket from the email-code step. */
+  @IsOptional() @IsIn(['true', 'false']) SIGNUP_REQUIRE_OTP?: string;
+
+  /** Where lead / contact / careers notifications go. Defaults to the support address. */
+  @IsOptional() @IsString() SALES_INBOX?: string;
+  @IsOptional() @IsString() SUPPORT_INBOX?: string;
 }
 
 /** Empty strings in .env files mean "not set". */

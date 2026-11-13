@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useEffect, useId, useRef, useState, type FormEvent } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ApiError } from '@/lib/api';
-import { ROLE_HOME } from '@/lib/routes';
+import { ROLE_HOME, safeNext } from '@/lib/routes';
 import { useAuthHydrated, useAuthStore } from '@/store/auth';
 import { isTwoFactorChallenge } from '@/features/account/api';
 import { EMAIL_RE, PasswordInput, Spinner, authErrorMessage } from '../_components/shared';
@@ -13,10 +13,6 @@ import step from '../2fa/step.module.css';
 import styles from '../auth.module.css';
 import type { DemoAccount } from './demoAccounts';
 
-/** Only same-site paths under /platform are honoured as a post-login destination. */
-function safeNext(next: string | null): string | null {
-  return next && next.startsWith('/platform') && !next.startsWith('//') ? next : null;
-}
 
 interface DemoLogins { password: string; accounts: readonly DemoAccount[] }
 

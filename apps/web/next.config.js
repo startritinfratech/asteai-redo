@@ -1,3 +1,6 @@
+const { HOST_REDIRECTS, LEGACY_REDIRECTS } = require('./redirects');
+const { buildSecurityHeaders } = require('./securityHeaders');
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   transpilePackages: ['@asteai/types'],
@@ -12,6 +15,20 @@ const nextConfig = {
   },
   images: {
     domains: ['asteai.com'],
+  },
+  poweredByHeader: false,
+  async headers() {
+    return [{
+      source: '/:path*',
+      headers: buildSecurityHeaders({
+        apiUrl: process.env.NEXT_PUBLIC_API_URL,
+        wsUrl: process.env.NEXT_PUBLIC_WS_URL,
+        dev: process.env.NODE_ENV !== 'production',
+      }),
+    }];
+  },
+  async redirects() {
+    return [...HOST_REDIRECTS, ...LEGACY_REDIRECTS];
   },
   async rewrites() {
     return [

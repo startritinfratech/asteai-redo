@@ -1,5 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { Suspense } from 'react';
+import { ContactForm } from '@/features/public-forms/ContactForm';
 import { PageHero, PageShell } from '@/features/marketing/PageShell';
 import { REGISTER_PATH } from '@/features/marketing/AuthAwareActions';
 import marketing from '@/features/marketing/marketing.module.css';
@@ -73,57 +75,10 @@ export default function ContactPage() {
 
       <section className={page.block} aria-labelledby="form-title">
         <div className={`${marketing.container} ${page.contactGrid}`}>
-          <form className={page.form} aria-labelledby="form-title" aria-describedby="form-note">
-            <div>
-              <h2 id="form-title" className={marketing.h2}>Send us a message</h2>
-              <p className={marketing.cardText}>Fill out the form and we’ll get back within 24–48 hours.</p>
-            </div>
-            <p id="form-note" className={page.formNote}>
-              Sending messages from this page isn’t available yet. Please email us at{' '}
-              <span className={page.email}>{SUPPORT_EMAIL}</span> instead.
-            </p>
-            <div className={page.formRow}>
-              <div className={page.field}>
-                <label htmlFor="contact-name" className={page.label}>Name</label>
-                <input id="contact-name" name="name" type="text" autoComplete="name" className={page.control} />
-              </div>
-              <div className={page.field}>
-                <label htmlFor="contact-email" className={page.label}>Email</label>
-                <input id="contact-email" name="email" type="email" autoComplete="email" className={page.control} />
-              </div>
-            </div>
-            <div className={page.field}>
-              <label htmlFor="contact-company" className={page.label}>
-                Company <span className={page.optional}>(optional)</span>
-              </label>
-              <input
-                id="contact-company"
-                name="company"
-                type="text"
-                autoComplete="organization"
-                className={page.control}
-              />
-            </div>
-            <div className={page.field}>
-              <label htmlFor="contact-message" className={page.label}>Message</label>
-              <textarea
-                id="contact-message"
-                name="message"
-                rows={5}
-                maxLength={5000}
-                placeholder="Tell us more about your inquiry..."
-                className={page.control}
-              />
-            </div>
-            <button
-              type="submit"
-              disabled
-              aria-describedby="form-note"
-              className={`${marketing.btn} ${marketing.btnPrimary} ${page.submit}`}
-            >
-              Send
-            </button>
-          </form>
+          {/* useSearchParams (?intent=demo) needs a Suspense boundary in a static page. */}
+          <Suspense fallback={<div className={page.form} aria-busy="true" />}>
+            <ContactForm />
+          </Suspense>
 
           <aside className={page.aside} aria-label="Contact details">
             <div className={marketing.card}>

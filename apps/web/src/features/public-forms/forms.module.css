@@ -1,0 +1,64 @@
+/* Shared bits of the public forms (contact, careers, requirement, newsletter, sign-up). */
+
+.fieldError { color: var(--rose); font-size: .84rem; }
+.invalid { border-color: var(--rose) !important; }
+.hint { color: var(--fg-3); font-size: .82rem; }
+.counter { color: var(--fg-3); font-size: .78rem; justify-self: end; }
+
+.alert {
+  padding: 12px 14px;
+  border-radius: var(--r-md);
+  border: 1px solid var(--rose);
+  background: var(--rose-soft);
+  color: var(--fg);
+  font-size: .92rem;
+}
+.alert:focus { outline: none; }
+
+.success {
+  display: grid; gap: 10px; justify-items: start;
+  padding: 24px;
+  border-radius: 18px;
+  border: 1px solid var(--mint);
+  background: var(--mint-soft);
+}
+.success:focus { outline: none; }
+.successTitle { font-size: 1.15rem; }
+
+.honeypot { position: absolute; left: -10000px; width: 1px; height: 1px; overflow: hidden; }
+
+.choiceGrid { display: grid; gap: 8px; }
+@media (min-width: 560px) { .choiceGrid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.choice {
+  display: grid; gap: 2px;
+  padding: 12px 14px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-md);
+  background: var(--bg);
+  cursor: pointer;
+}
+.choice:has(input:checked) { border-color: var(--blue); background: var(--blue-soft); }
+.choice:has(input:focus-visible) { outline: 2px solid var(--blue); outline-offset: 2px; }
+.choice input { position: absolute; opacity: 0; pointer-events: none; }
+.choiceName { font-weight: 700; font-size: .92rem; }
+.choiceDesc { color: var(--fg-2); font-size: .82rem; }
+
+.fieldset { border: 0; margin: 0; padding: 0; display: grid; gap: 8px; min-width: 0; }
+.legend { font-weight: 700; font-size: .92rem; padding: 0; margin-bottom: 6px; }
+
+.actions { display: flex; flex-wrap: wrap; gap: 10px; justify-content: space-between; align-items: center; }
+
+/* Footer newsletter */
+.newsletter { display: grid; gap: 8px; margin-top: 16px; max-width: 360px; }
+.newsletterRow { display: flex; gap: 8px; }
+.newsletterRow input {
+  flex: 1; min-width: 0; min-height: 40px;
+  padding: 8px 12px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-pill);
+  background: var(--bg);
+  color: var(--fg);
+}
+.newsletterMsg { font-size: .84rem; color: var(--fg-2); }
+.newsletterMsg[data-tone='ok'] { color: var(--mint); }
+.newsletterMsg[data-tone='error'] { color: var(--rose); }

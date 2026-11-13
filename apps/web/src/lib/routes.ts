@@ -2,6 +2,16 @@ import type { UserRole } from '@asteai/types';
 
 export const LOGIN_PATH = '/auth/login';
 
+/**
+ * A post-sign-in destination taken from `?next=`: only same-site paths, never the auth pages
+ * themselves (no loops) and never protocol-relative or backslash tricks (`//evil`, `/\evil`).
+ */
+export function safeNext(next: string | null | undefined): string | null {
+  if (!next || !next.startsWith('/') || next.startsWith('//') || next.includes('\\')) return null;
+  if (next === '/auth' || next.startsWith('/auth/')) return null;
+  return next.length <= 500 ? next : null;
+}
+
 /** Where each role lands after sign-in. Every target must be a built page. */
 export const ROLE_HOME: Record<UserRole, string> = {
   Employer: '/platform/requisitions',
@@ -40,6 +50,7 @@ export const NAV: Record<UserRole, NavSection[]> = {
       item('billing', 'Billing & Credits'),
       item('team', 'Team & Roles'),
       item('verify', 'Verify a Passport'),
+      item('support', 'Help & Support'),
       item('security', 'Security'),
     ]],
   ],
@@ -55,6 +66,7 @@ export const NAV: Record<UserRole, NavSection[]> = {
       item('messages', 'Messages'),
       item('privacy', 'Privacy & Consent'),
       item('verify', 'Verify a Passport'),
+      item('support', 'Help & Support'),
       item('security', 'Security'),
     ]],
   ],
@@ -63,6 +75,7 @@ export const NAV: Record<UserRole, NavSection[]> = {
       item('market', 'Find Projects'),
       item('proposals', 'My Proposals'),
       item('my-services', 'My Services'),
+      item('products', 'My Products'),
       item('orders', 'Orders'),
       item('contracts', 'Escrow Contracts'),
       item('wallet', 'Wallet'),
@@ -73,6 +86,7 @@ export const NAV: Record<UserRole, NavSection[]> = {
       item('messages', 'Messages'),
       item('profile', 'My Profile'),
       item('privacy', 'Privacy & Consent'),
+      item('support', 'Help & Support'),
       item('security', 'Security'),
     ]],
   ],
@@ -91,6 +105,7 @@ export const NAV: Record<UserRole, NavSection[]> = {
       item('messages', 'Messages'),
       item('profile', 'Company Profile'),
       item('verify', 'Verify a Passport'),
+      item('support', 'Help & Support'),
       item('security', 'Security'),
     ]],
   ],
@@ -101,6 +116,8 @@ export const NAV: Record<UserRole, NavSection[]> = {
       item('assessment-sessions', 'Assessment Sessions'),
       item('expert-approvals', 'Expert Approvals'),
       item('service-approvals', 'Service Approvals'),
+      item('product-approvals', 'Product Approvals'),
+      item('support-queue', 'Support Queue'),
       item('payouts', 'Expert Payouts'),
       item('payments', 'Unapplied Payments'),
       item('invoices', 'Invoices'),
@@ -112,6 +129,7 @@ export const NAV: Record<UserRole, NavSection[]> = {
       item('auditlog', 'Audit Log'),
     ]],
     ['Growth & Marketing', [
+      item('leads', 'Website Leads'),
       item('mkt/studio', 'Ad Studio'),
       item('mkt/campaigns', 'Campaigns'),
       item('mkt/audiences', 'Audiences'),

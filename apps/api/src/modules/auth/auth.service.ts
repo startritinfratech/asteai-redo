@@ -1,4 +1,7 @@
-import { ConflictException, ForbiddenException, Inject, Injectable, UnauthorizedException } from '@nestjs/common';
+import {
+  BadRequestException, ConflictException, ForbiddenException, Inject, Injectable, Optional, UnauthorizedException,
+} from '@nestjs/common';
+import { SignupOtpService } from './signup-otp.service';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcryptjs';
@@ -41,6 +44,7 @@ export class AuthService {
     private readonly jwtService: JwtService,
     private readonly config: ConfigService,
     private readonly email: EmailService,
+    @Optional() private readonly signupOtp?: SignupOtpService,
   ) {}
 
   /**
@@ -88,28 +92,46 @@ export class AuthService {
     return { accessToken, refreshToken: `${rows[0].id}.${secret}`, user };
   }
 
-  /** Creates the account and queues the verification email in the same transaction. */
+  /**
+   * Creates the account. With a sign-up ticket (POST /auth/email/verify-otp) the address is
+   * already proven: the account starts verified and no verification email is sent. Without
+   * one, the verification email is queued in the same transaction. SIGNUP_REQUIRE_OTP=true
+   * makes the ticket mandatory.
+   */
   async register(dto: RegisterDto, meta: SessionMeta = {}): Promise<AuthTokens> {
+    let verified = false;
+    if (dto.otpTicket) {
+      const ticketEmail = this.signupOtp?.ticketEmail(dto.otpTicket) ?? null;
+      if (!ticketEmail || ticketEmail !== dto.email.trim().toLowerCase()) {
+        throw new BadRequestException('Your email verification has expired. Request a new code.');
+      }
+      verified = true;
+    } else if (this.config.get<string>('SIGNUP_REQUIRE_OTP') === 'true') {
+      throw new BadRequestException('Verify your email address with a code before creating an account.');
+    }
+
     const passwordHash = await bcrypt.hash(dto.password, PASSWORD_ROUNDS);
     try {
       const user = await withTransaction(this.db, async (client) => {
         const { rows } = await client.query<UserRow>(
           `INSERT INTO user_accounts
-             (email, email_canonical, first_name, last_name, role, password_hash, auth_provider)
-           SELECT $1::text, LOWER($1::text), $2::text, $3::text, $4::user_role_enum, $5::text, 'local'
+             (email, email_canonical, first_name, last_name, role, password_hash, auth_provider, email_verified)
+           SELECT $1::text, LOWER($1::text), $2::text, $3::text, $4::user_role_enum, $5::text, 'local', $6::boolean
             WHERE NOT EXISTS (SELECT 1 FROM user_accounts WHERE email_canonical = LOWER($1::text) OR LOWER(email) = LOWER($1::text))
            RETURNING ${USER_COLUMNS}`,
-          [dto.email, dto.firstName, dto.lastName, dto.role ?? 'Candidate', passwordHash],
+          [dto.email, dto.firstName, dto.lastName, dto.role ?? 'Candidate', passwordHash, verified],
         );
         if (!rows.length) throw new ConflictException('Email already registered');
         const created = mapUserRow(rows[0]);
-        const token = await issueEmailToken(client, created.id, 'verify_email', VERIFY_TOKEN_TTL_MS);
-        await this.email.enqueue(
-          'verify-email',
-          created.email,
-          { firstName: created.firstName, path: `/auth/verify-email?token=${token}` },
-          { client, userId: created.id },
-        );
+        if (!verified) {
+          const token = await issueEmailToken(client, created.id, 'verify_email', VERIFY_TOKEN_TTL_MS);
+          await this.email.enqueue(
+            'verify-email',
+            created.email,
+            { firstName: created.firstName, path: `/auth/verify-email?token=${token}` },
+            { client, userId: created.id },
+          );
+        }
         return created;
       });
       return this.login(user, meta);
