@@ -1,0 +1,89 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Typecheck, lint, test, build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: bun install --frozen-lockfile
+      - run: bun run typecheck
+      - run: bun run lint
+      - run: bun run test
+      - run: bun run build
+        env:
+          NEXT_TELEMETRY_DISABLED: 1
+
+  database:
+    name: Migrations and API readiness
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: asteai
+          POSTGRES_PASSWORD: asteai
+          POSTGRES_DB: asteai
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U asteai"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgres://asteai:asteai@localhost:5432/asteai
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: bun install --frozen-lockfile
+      - name: Apply migrations
+        run: bun run --filter @asteai/db migrate
+      - name: Re-run is a no-op
+        run: bun run --filter @asteai/db migrate:status
+      - name: Build the API
+        run: bun run --filter @asteai/api build
+      - name: Start the API and wait for /readyz
+        working-directory: apps/api
+        env:
+          NODE_ENV: test
+          PORT: 3001
+          DATABASE_HOST: localhost
+          DATABASE_NAME: asteai
+          DATABASE_USER: asteai
+          DATABASE_PASSWORD: asteai
+          DATABASE_IAM_AUTH: 'false'
+          DATABASE_SSL: 'false'
+          JWT_SECRET: ci-only-secret-0123456789abcdefghijklmnop
+        run: |
+          node dist/apps/api/src/main.js > api.log 2>&1 &
+          for i in $(seq 1 30); do
+            if curl -fsS http://localhost:3001/readyz; then echo; exit 0; fi
+            sleep 1
+          done
+          cat api.log
+          exit 1

@@ -26,3 +26,10 @@
     grid-template-rows: auto 1fr;
   }
 }
+
+.loading {
+  display: grid;
+  place-items: center;
+  height: 100vh;
+  color: var(--fg-3);
+}

@@ -1,0 +1,102 @@
+.dock {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 50;
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  max-width: calc(100vw - 32px);
+}
+
+.status {
+  max-width: 320px;
+}
+
+.status:empty {
+  display: none;
+}
+
+.heard,
+.reply {
+  margin: 0 0 6px;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg-2);
+  font-size: 13px;
+}
+
+.heard {
+  color: var(--fg-3);
+}
+
+.reply {
+  color: var(--fg-2);
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+}
+
+.confirm,
+.cancel {
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--line-2);
+  background: var(--bg-3);
+  color: var(--fg-2);
+  cursor: pointer;
+}
+
+.confirm {
+  border-color: var(--blue);
+  background: var(--blue-soft);
+}
+
+.mic {
+  width: 48px;
+  height: 48px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  border: 1px solid var(--line-2);
+  background: var(--bg-3);
+  color: var(--fg-2);
+  cursor: pointer;
+}
+
+.mic svg {
+  width: 22px;
+  height: 22px;
+  fill: currentColor;
+}
+
+.mic[data-phase='listening'] {
+  border-color: var(--rose);
+  background: var(--rose-soft);
+  color: var(--rose);
+}
+
+.mic:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.mic:focus-visible,
+.confirm:focus-visible,
+.cancel:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+}
+
+.typed input {
+  width: 220px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--line-2);
+  background: var(--bg-2);
+  color: var(--fg-2);
+}

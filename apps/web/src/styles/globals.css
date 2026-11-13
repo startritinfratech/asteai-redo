@@ -1,5 +1,6 @@
 /* AsteAI Design System – Global CSS
- * Dark-only theme. CSS variables mirror the original index.html tokens.
+ * Dark is the default theme; a light set follows. The theme is chosen by `data-theme` on
+ * <html> (set before paint by the script in app/layout.tsx), falling back to the OS setting.
  */
 
 :root {
@@ -9,10 +10,11 @@
   --bg-4:   #1A1930;
   --fg:     #F4F4FA;
   --fg-2:   #A3A5BE;
-  --fg-3:   #6B6E8A;
+  --fg-3:   #787B9B;  /* AA (4.5:1) on bg, bg-2 and bg-3 */
   --line:   #1F1E33;
   --line-2: #2D2C48;
-  --blue:        #4D8BFF;
+  --blue:        #4073D4;  /* AA with white button text */
+  --blue-hover:  #3667C4;
   --blue-2:      #7FB0FF;
   --blue-soft:   rgba(77,139,255,.14);
   --gold:        #E8B458;
@@ -23,12 +25,58 @@
   --rose-soft:   rgba(255,107,138,.14);
   --amber:       #F5B14B;
   --amber-soft:  rgba(245,177,75,.14);
-  --font-display: var(--font-display, 'Sora', 'Segoe UI', system-ui, sans-serif);
-  --font-body:    var(--font-body,    'Manrope', 'Segoe UI', system-ui, sans-serif);
-  --font-mono:    var(--font-mono,    'JetBrains Mono', Menlo, Consolas, monospace);
+  /* next/font sets --font-sora / --font-manrope / --font-jetbrains on <html>; these add fallbacks.
+     (Naming them --font-display etc. in both places made a CSS cycle and dropped to the UA serif.) */
+  --font-display: var(--font-sora, 'Sora'), 'Segoe UI', system-ui, sans-serif;
+  --font-body:    var(--font-manrope, 'Manrope'), 'Segoe UI', system-ui, sans-serif;
+  --font-mono:    var(--font-jetbrains, 'JetBrains Mono'), Menlo, Consolas, monospace;
+  --violet:      #A98BFF;
+  --violet-soft: rgba(169,139,255,.14);
+  --card:        var(--bg-2);
+  --on-accent:   #fff;
+  /* Surfaces with alpha (sticky header, glows, overlays). */
+  --header-bg:        rgba(3,1,10,.86);
+  --header-bg-blur:   rgba(3,1,10,.72);
+  --glow-blue:        rgba(77,139,255,.18);
+  --glow-violet:      rgba(124,92,255,.14);
+  --shadow-lg:        0 24px 64px rgba(0,0,0,.45);
+  --overlay:          rgba(3,1,10,.7);
+  /* Radius + 4px spacing scale. */
+  --r-sm: 8px;  --r-md: 12px;  --r-lg: 16px;  --r-xl: 24px;  --r-pill: 999px;
+  --s-1: 4px;  --s-2: 8px;  --s-3: 12px;  --s-4: 16px;  --s-5: 20px;  --s-6: 24px;
+  --s-8: 32px; --s-10: 40px; --s-12: 48px; --s-16: 64px;
   --top-h: 56px;
   --rail-w: 230px;
   color-scheme: dark;
+}
+
+/* Light theme: explicit choice, or the OS preference when no choice is stored. */
+:root[data-theme='light'] {
+  --bg:   #FFFFFF;
+  --bg-2: #F6F6FB;
+  --bg-3: #EDEDF5;
+  --bg-4: #E2E2EE;
+  --fg:   #0B0A1A;
+  --fg-2: #45475E;
+  --fg-3: #676A84;
+  --line:   #E3E3EE;
+  --line-2: #D0D0E0;
+  --blue:   #2563EB;
+  --blue-hover: #1D4ED8;
+  --blue-2: #1D4ED8;
+  --blue-soft: rgba(37,99,235,.10);
+  --gold:  #976000;  --gold-soft:  rgba(151,96,0,.10);
+  --mint:  #0A7B54;  --mint-soft:  rgba(10,123,84,.10);
+  --rose:  #C42550;  --rose-soft:  rgba(196,37,80,.10);
+  --amber: #9F5A00;  --amber-soft: rgba(159,90,0,.10);
+  --violet: #6D4AE0; --violet-soft: rgba(109,74,224,.10);
+  --header-bg:      rgba(255,255,255,.92);
+  --header-bg-blur: rgba(255,255,255,.78);
+  --glow-blue:      rgba(37,99,235,.10);
+  --glow-violet:    rgba(109,74,224,.08);
+  --shadow-lg:      0 24px 48px rgba(16,16,40,.10);
+  --overlay:        rgba(11,10,26,.45);
+  color-scheme: light;
 }
 
 *, *::before, *::after { box-sizing: border-box; }

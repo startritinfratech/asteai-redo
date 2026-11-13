@@ -1,0 +1,114 @@
+/* Contract detail page and the Create-contract wizard. Safe down to 360px wide. */
+
+.page { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.stack { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.between { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; }
+.muted { color: var(--fg-3); font-size: .8rem; }
+.mono { font-family: var(--font-mono); }
+.h2 { font-size: .95rem; font-weight: 600; margin: 0; color: var(--fg); }
+.error { color: var(--rose); font-size: .82rem; margin: 0; }
+.ok { color: var(--mint); font-size: .82rem; margin: 0; }
+.pending {
+  font-size: .8rem;
+  color: var(--amber);
+  background: var(--amber-soft);
+  border-radius: 8px;
+  padding: 6px 10px;
+}
+
+/* Header */
+.title { margin: 0; font-size: 1.15rem; font-weight: 600; overflow-wrap: anywhere; }
+.facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+  margin: 0;
+}
+.facts dt { font-size: .72rem; color: var(--fg-3); text-transform: uppercase; letter-spacing: .04em; }
+.facts dd { margin: 2px 0 0; font-size: .88rem; color: var(--fg); overflow-wrap: anywhere; }
+
+/* Escrow summary */
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
+
+/* NDA / signatures */
+.nda {
+  max-height: 240px;
+  overflow: auto;
+  white-space: pre-wrap;
+  font-size: .84rem;
+  line-height: 1.5;
+  color: var(--fg-2);
+  background: var(--bg-3);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 12px;
+  overflow-wrap: anywhere;
+}
+.signatures { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; }
+.sigCard { border: 1px solid var(--line); border-radius: 10px; padding: 10px; font-size: .84rem; }
+.sigName { font-family: var(--font-display); font-style: italic; font-size: 1rem; color: var(--fg); }
+.check { display: flex; gap: 8px; align-items: flex-start; font-size: .84rem; color: var(--fg-2); }
+.check input { margin-top: 3px; }
+
+/* Milestone timeline */
+.timeline { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.ms {
+  position: relative;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--line-2);
+  border-radius: 10px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+.ms[data-status='released'], .ms[data-status='accepted'] { border-left-color: var(--mint); }
+.ms[data-status='funded'] { border-left-color: var(--gold); }
+.ms[data-status='submitted'], .ms[data-status='revision_requested'] { border-left-color: var(--amber); }
+.ms[data-status='cancelled'] { border-left-color: var(--rose); opacity: .7; }
+.msTitle { font-weight: 600; font-size: .92rem; overflow-wrap: anywhere; }
+.msAmt { font-family: var(--font-mono); color: var(--fg-2); margin-left: auto; }
+.note {
+  font-size: .82rem;
+  color: var(--fg-2);
+  background: var(--bg-3);
+  border-radius: 8px;
+  padding: 8px 10px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.confirm {
+  border: 1px solid var(--line-2);
+  background: var(--bg-2);
+  border-radius: 10px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Wizard */
+.steps { display: flex; flex-wrap: wrap; gap: 6px; list-style: none; margin: 0; padding: 0; font-size: .76rem; }
+.step { padding: 4px 8px; border-radius: 999px; border: 1px solid var(--line); color: var(--fg-3); }
+.stepOn { border-color: var(--blue); color: var(--fg); background: var(--blue-soft); }
+.grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+.msRow {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: end;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+@media (max-width: 560px) {
+  .msRow { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .msRow > :first-child { grid-column: 1 / -1; }
+}
+.sum { font-family: var(--font-mono); font-size: .84rem; }
+.sumBad { color: var(--rose); }
+.sumOk { color: var(--mint); }
+.review { margin: 0; padding-left: 18px; font-size: .86rem; color: var(--fg-2); display: flex; flex-direction: column; gap: 4px; }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }

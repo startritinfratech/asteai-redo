@@ -1,13 +1,16 @@
-import { Controller, Get, Post, Patch, Body, Param, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
-import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
-import { PassportsService } from './passports.service';
-import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { User } from '@asteai/types';
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { Roles } from '../../common/decorators/roles.decorator';
+import { RolesGuard } from '../../common/guards/roles.guard';
+import { UpdateShareDto } from './dto/update-share.dto';
+import { PassportsService } from './passports.service';
 
 @ApiTags('passports')
 @ApiBearerAuth()
-@UseGuards(AuthGuard('jwt'))
+@UseGuards(AuthGuard('jwt'), RolesGuard)
 @Controller('passports')
 export class PassportsController {
   constructor(private readonly svc: PassportsService) {}
@@ -23,20 +26,18 @@ export class PassportsController {
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.svc.findById(id);
+  findOne(@Param('id') id: string, @CurrentUser() user: User) {
+    return this.svc.findById(id, user);
   }
 
   @Patch(':id/share')
-  updateShare(
-    @Param('id') id: string,
-    @Body() body: { discoverable: boolean; showIdentity: boolean },
-  ) {
-    return this.svc.updateShare(id, body);
+  updateShare(@Param('id') id: string, @Body() body: UpdateShareDto, @CurrentUser() user: User) {
+    return this.svc.updateShare(id, body, user);
   }
 
   @Post(':id/verify')
+  @Roles('Employer', 'Buyer', 'Admin')
   addVerification(@Param('id') id: string, @CurrentUser() user: User) {
-    return this.svc.addVerification(id, user.firstName + ' ' + user.lastName);
+    return this.svc.addVerification(id, user);
   }
 }

@@ -1,8 +1,11 @@
 'use client';
 
 import Link from 'next/link';
-import { useAuthStore } from '@/store/auth';
+import { useRouter } from 'next/navigation';
 import type { User } from '@asteai/types';
+import { useAuthStore } from '@/store/auth';
+import { LOGIN_PATH } from '@/lib/routes';
+import { NotificationBell } from '@/features/notifications';
 import styles from './TopBar.module.css';
 
 interface Props {
@@ -10,7 +13,13 @@ interface Props {
 }
 
 export function TopBar({ user }: Props) {
+  const router = useRouter();
   const logout = useAuthStore((s) => s.logout);
+
+  const signOut = async () => {
+    await logout();
+    router.replace(LOGIN_PATH);
+  };
 
   return (
     <header className={styles.top}>
@@ -32,11 +41,13 @@ export function TopBar({ user }: Props) {
               <span className={styles.persona}>
                 {user.firstName} {user.lastName} — {user.role}
               </span>
-              <button className={styles.bell} title="Notifications">🔔</button>
-              <button className={styles.btn} onClick={logout}>Sign out</button>
+              <NotificationBell />
+              <button type="button" className={styles.btn} onClick={signOut}>
+                Sign out
+              </button>
             </>
           ) : (
-            <Link href="/auth/login" className={styles.btn}>Sign in</Link>
+            <Link href={LOGIN_PATH} className={styles.btn}>Sign in</Link>
           )}
         </div>
       </div>

@@ -3,14 +3,17 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "node_modules/typescript/bin/tsc -p tsconfig.build.json && node --env-file=.env.local dist/apps/api/src/main.js",
-    "build": "node_modules/typescript/bin/tsc -p tsconfig.build.json",
+    "dev": "bun run --filter @asteai/types build && tsc -p tsconfig.build.json && node --env-file=.env.local dist/apps/api/src/main.js",
+    "build": "bun run --filter @asteai/types build && tsc -p tsconfig.build.json",
     "start": "node dist/apps/api/src/main.js",
-    "lint": "eslint 'src/**/*.ts'",
-    "typecheck": "node_modules/typescript/bin/tsc --noEmit"
+    "lint": "eslint src",
+    "typecheck": "tsc --noEmit",
+    "test": "node --import reflect-metadata --import tsx --test \"src/**/*.spec.ts\""
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^1.4.0",
     "@asteai/types": "workspace:*",
+    "@aws-sdk/client-sesv2": "^3.600.0",
     "@aws-sdk/rds-signer": "^3.600.0",
     "@nestjs/common": "^10.3.10",
     "@nestjs/config": "^3.2.3",
@@ -19,8 +22,10 @@
     "@nestjs/mapped-types": "^2.0.5",
     "@nestjs/passport": "^10.0.3",
     "@nestjs/platform-express": "^10.3.10",
+    "@nestjs/platform-socket.io": "^10.4.22",
     "@nestjs/swagger": "^7.4.0",
     "@nestjs/throttler": "^6.2.1",
+    "@nestjs/websockets": "^10.4.22",
     "@swc/core": "^1.16.21",
     "@swc/helpers": "^0.5.23",
     "bcryptjs": "^2.4.3",
@@ -38,11 +43,13 @@
     "pg": "^8.13.3",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
+    "socket.io": "^4.8.1",
     "ts-node": "^10.9.2",
     "tsx": "^4.23.15",
     "uuid": "^10.0.0"
   },
   "devDependencies": {
+    "@eslint/js": "^9",
     "@types/bcryptjs": "^2.4.6",
     "@types/compression": "^1.7.5",
     "@types/cookie-parser": "^1.4.7",
@@ -53,6 +60,9 @@
     "@types/pdfkit": "^0.13.4",
     "@types/pg": "^8.11.6",
     "@types/uuid": "^10.0.0",
-    "typescript": "^5.4.5"
+    "eslint": "^9",
+    "globals": "^15",
+    "typescript": "^5.4.5",
+    "typescript-eslint": "^8"
   }
 }

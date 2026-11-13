@@ -4,3 +4,5 @@
 .left { display: flex; flex-direction: column; gap: 4px; }
 .reqTitle { font-weight: 600; }
 .meta { font-size: .8rem; color: var(--fg-2); }
+.right { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
+.action { color: var(--blue-2); font-size: .85rem; font-weight: 600; }

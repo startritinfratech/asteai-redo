@@ -4,6 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import useSWR from 'swr';
 import { Button, Eyebrow, Empty, Tag, PageHeader, CertCard, Hash } from '@/components/ui';
+import { errorMessage } from '@/lib/api';
 import { interviewsApi, downloadCertificate, toNumber } from '@/lib/interviews';
 import styles from '../studio/studio.module.css';
 
@@ -16,8 +17,13 @@ export default function CertificatesPage() {
   const download = async (id: string) => {
     setBusy(id);
     setError(null);
-    try { await downloadCertificate(id); } catch (e: any) { setError(e?.message ?? 'Download failed'); }
-    setBusy(null);
+    try {
+      await downloadCertificate(id);
+    } catch (e) {
+      setError(errorMessage(e, 'Download failed'));
+    } finally {
+      setBusy(null);
+    }
   };
 
   return (

@@ -1,0 +1,168 @@
+/* Legal documents: readable measure (~70ch), table of contents, Markdown prose. */
+
+.layout {
+  display: grid;
+  gap: 32px;
+  padding-block: 8px 56px;
+}
+@media (min-width: 1100px) {
+  .layout {
+    grid-template-columns: 260px minmax(0, 1fr);
+    gap: 56px;
+    align-items: start;
+  }
+}
+
+/* ── Table of contents ─────────────────────────────────────────────────────── */
+.toc {
+  padding: 18px 20px;
+  border-radius: 14px;
+  border: 1px solid var(--line-2);
+  background: var(--bg-2);
+  max-width: 70ch;
+}
+@media (min-width: 1100px) {
+  .toc {
+    position: sticky;
+    top: 84px;
+    max-height: calc(100vh - 108px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+}
+.tocTitle {
+  font-size: .8rem;
+  font-family: var(--font-mono);
+  font-weight: 600;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--fg-3);
+  margin-bottom: 10px;
+}
+.tocList {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: .9rem;
+}
+.tocLink {
+  display: block;
+  padding: 5px 8px;
+  border-radius: 6px;
+  color: var(--fg-2);
+  text-decoration: none;
+  line-height: 1.4;
+}
+.tocLink:hover { color: var(--fg); background: var(--bg-3); }
+
+/* ── Prose ─────────────────────────────────────────────────────────────────── */
+.prose {
+  max-width: 70ch;
+  min-width: 0;
+  color: var(--fg-2);
+  font-size: 1rem;
+  line-height: 1.75;
+  overflow-wrap: break-word;
+}
+.prose > * + * { margin-top: 1em; }
+.prose strong { color: var(--fg); }
+.prose a { color: var(--blue-2); text-underline-offset: 2px; }
+.prose a:hover { color: var(--fg); }
+.prose code {
+  font-family: var(--font-mono);
+  font-size: .88em;
+  padding: 1px 5px;
+  border-radius: 5px;
+  background: var(--bg-3);
+  color: var(--fg);
+}
+.heading {
+  color: var(--fg);
+  scroll-margin-top: 84px;
+}
+.prose h2.heading {
+  font-size: 1.35rem;
+  margin-top: 2.2em;
+  padding-top: 1.2em;
+  border-top: 1px solid var(--line);
+}
+.prose > h2.heading:first-child { margin-top: 0; padding-top: 0; border-top: 0; }
+.prose h3.heading { font-size: 1.1rem; margin-top: 1.8em; }
+.prose h4.heading { font-size: 1rem; margin-top: 1.5em; color: var(--fg); }
+.prose ul, .prose ol { padding-left: 1.4em; margin-bottom: 0; }
+.prose li + li { margin-top: .4em; }
+.prose li > ul, .prose li > ol { margin-top: .4em; }
+.prose li::marker { color: var(--fg-3); }
+.prose hr {
+  border: 0;
+  border-top: 1px solid var(--line);
+  margin-block: 2em;
+}
+.prose blockquote {
+  margin: 1.5em 0 0;
+  padding: 14px 18px;
+  border-left: 3px solid var(--blue);
+  border-radius: 0 10px 10px 0;
+  background: var(--bg-2);
+}
+.prose blockquote > * + * { margin-top: .8em; }
+
+.tableWrap {
+  overflow-x: auto;
+  border: 1px solid var(--line-2);
+  border-radius: 10px;
+}
+.tableWrap:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+.tableWrap table {
+  width: 100%;
+  min-width: 520px;
+  border-collapse: collapse;
+  font-size: .9rem;
+  line-height: 1.55;
+}
+.tableWrap th, .tableWrap td {
+  padding: 10px 12px;
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid var(--line);
+}
+.tableWrap th { color: var(--fg); background: var(--bg-2); font-weight: 700; }
+.tableWrap tr:last-child td { border-bottom: 0; }
+
+.email {
+  color: var(--fg);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.backTop { margin-top: 2.5em; font-size: .92rem; }
+
+/* ── Related documents ─────────────────────────────────────────────────────── */
+.related {
+  padding-block: 32px 56px;
+  border-top: 1px solid var(--line);
+}
+.relatedTitle { font-size: 1rem; margin-bottom: 14px; }
+.relatedList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 22px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: .94rem;
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}

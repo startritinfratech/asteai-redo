@@ -5,7 +5,6 @@
 // Production builds use the real swagger via compiled JS (tsc output).
 
 const noop = () => () => {};
-const noopDecorator = () => noop;
 
 export const ApiTags = noop;
 export const ApiBearerAuth = noop;

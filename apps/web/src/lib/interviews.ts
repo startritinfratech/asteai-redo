@@ -2,7 +2,7 @@
  * AI interviews: types and calls to /api/v1/interviews. The interview itself runs on
  * deeptech_ai over a WebSocket; this API starts it and stores the result.
  */
-import { api } from './api';
+import { api, apiRequest } from './api';
 
 export type FieldCategory = 'tech' | 'non-tech' | 'frontline';
 
@@ -69,18 +69,12 @@ export const interviewsApi = {
   assessment: (id: string) => api.get<PartOneResult>(`/interviews/mock/${id}/assessment`),
 };
 
-const BASE = process.env.NEXT_PUBLIC_API_URL ? `${process.env.NEXT_PUBLIC_API_URL}/api/v1` : '/api/v1';
-
-/** Downloads the PDF (the endpoint needs the bearer token, so a plain link will not do). */
+/**
+ * Downloads the PDF. The endpoint needs the bearer token, so a plain link will not do;
+ * apiRequest also refreshes an expired token and throws ApiError on failure.
+ */
 export async function downloadCertificate(id: string): Promise<void> {
-  const token = localStorage.getItem('accessToken');
-  const res = await fetch(`${BASE}/interviews/mock/${id}/certificate`, {
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
-  });
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body.message ?? `Download failed (${res.status})`);
-  }
+  const res = await apiRequest(`/interviews/mock/${id}/certificate`);
   const url = URL.createObjectURL(await res.blob());
   const a = document.createElement('a');
   a.href = url;

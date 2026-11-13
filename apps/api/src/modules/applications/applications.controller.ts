@@ -6,6 +6,7 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { User } from '@asteai/types';
+import { AddScorecardDto, AdvanceStageDto } from './dto/application.dto';
 
 @ApiTags('applications')
 @ApiBearerAuth()
@@ -42,17 +43,18 @@ export class ApplicationsController {
   @Roles('Employer', 'Admin')
   advanceStage(
     @Param('id') id: string,
-    @Body() body: { stage: string; by: string },
+    @Body() body: AdvanceStageDto,
     @CurrentUser() user: User,
   ) {
-    return this.svc.advanceStage(id, body.stage as any, body.by, user);
+    const by = body.by ?? `${user.firstName} ${user.lastName}`.trim();
+    return this.svc.advanceStage(id, body.stage, by, user);
   }
 
   @Post(':id/scorecards')
   @Roles('Employer', 'Admin')
   addScorecard(
     @Param('id') id: string,
-    @Body() body: { score: number; note: string },
+    @Body() body: AddScorecardDto,
     @CurrentUser() user: User,
   ) {
     return this.svc.addScorecard(id, body, user);

@@ -1,16 +1,28 @@
-import { Injectable, Inject, UnauthorizedException } from '@nestjs/common';
+import { Inject, Injectable, UnauthorizedException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
-import { ConfigService } from '@nestjs/config';
 import { Pool } from 'pg';
+import type { User, UserRole } from '@asteai/types';
 import { DB_POOL } from '../../../database/database.module';
+import { mapUserRow, USER_COLUMNS, UserRow } from '../../users/user.mapper';
+import { ACCOUNT_ACTIVE_SQL, NOT_BLOCKED_SQL, tokenIssueParams, tokenNotRevokedSql } from '../account-status';
 
-interface JwtPayload {
+export interface JwtPayload {
   sub: string;
-  role: string;
+  role: UserRole;
   tenantId: string | null;
+  /**
+   * Issue time in milliseconds (the standard `iat` is whole seconds), so a password change
+   * revokes a token minted earlier in the same second. Absent on older tokens.
+   */
+  iatMs?: number;
 }
 
+/**
+ * Validates the bearer access token and loads the (still active, not banned or suspended)
+ * user onto `request.user`, so a ban takes effect on the next request.
+ */
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
   constructor(
@@ -19,33 +31,26 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
   ) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
-      secretOrKey: config.getOrThrow('JWT_SECRET'),
+      secretOrKey: config.getOrThrow<string>('JWT_SECRET'),
       ignoreExpiration: false,
     });
   }
 
-  async validate(payload: JwtPayload) {
-    const { rows } = await this.db.query(
-      `SELECT id, email, first_name, last_name, role, tenant_id, title,
-              avatar_url, account_status, email_verified, created_at, updated_at
-       FROM user_accounts WHERE id = $1 AND account_status = 'active' AND deleted_at IS NULL`,
-      [payload.sub],
+  /**
+   * Also refuses tokens that carry a `purpose` claim (e.g. a 2FA login challenge, which is
+   * signed with a different key anyway) and access tokens issued before the password was
+   * last changed or reset, so a password change signs out other devices at once.
+   */
+  async validate(payload: JwtPayload & { purpose?: unknown; iat?: number }): Promise<User> {
+    if (payload.purpose !== undefined || typeof payload.sub !== 'string') throw new UnauthorizedException();
+    const { rows } = await this.db.query<UserRow>(
+      `SELECT ${USER_COLUMNS} FROM user_accounts
+        WHERE id = $1 AND ${ACCOUNT_ACTIVE_SQL} AND ${NOT_BLOCKED_SQL}
+          AND ${tokenNotRevokedSql(2, 3)}`,
+      [payload.sub, ...tokenIssueParams(payload)],
     );
+
     if (!rows.length) throw new UnauthorizedException();
-    const u = rows[0];
-    return {
-      id:            u.id,
-      email:         u.email,
-      firstName:     u.first_name,
-      lastName:      u.last_name,
-      role:          u.role,
-      tenantId:      u.tenant_id,
-      title:         u.title,
-      avatarUrl:     u.avatar_url,
-      accountStatus: u.account_status,
-      emailVerified: Boolean(u.email_verified),
-      createdAt:     String(u.created_at),
-      updatedAt:     String(u.updated_at),
-    };
+    return mapUserRow(rows[0]);
   }
 }

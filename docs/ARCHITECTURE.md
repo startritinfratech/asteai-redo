@@ -74,7 +74,9 @@ cp apps/web/.env.example apps/web/.env.local
 ### 3. Run database migrations
 
 ```bash
-psql $DATABASE_URL -f packages/db/migrations/001_initial_schema.sql
+DATABASE_URL=postgres://... bun run --filter @asteai/db migrate
+# `migrate:status` lists applied / pending files. On a database where the SQL was
+# applied by hand, insert those file names into schema_migrations first.
 ```
 
 ### 4. Start development servers
@@ -258,7 +260,6 @@ mkdir apps/api/src/modules/<name>
 | `DATABASE_PASSWORD` | Yes | |
 | `DATABASE_SSL` | | `true` for RDS |
 | `JWT_SECRET` | Yes | 64+ chars |
-| `JWT_REFRESH_SECRET` | Yes | Different from JWT_SECRET |
 | `CORS_ORIGINS` | | Comma-separated |
 | `AI_SERVICE_URL` | | deeptech_ai FastAPI |
 | `RAZORPAY_KEY_ID` | | Payments |

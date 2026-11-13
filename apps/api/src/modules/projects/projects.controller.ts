@@ -1,11 +1,20 @@
-import { Controller, Get, Post, Patch, Body, Param, Query, UseGuards } from '@nestjs/common';
+import {
+  Body, Controller, Get, GoneException, Param, Patch, Post, Query, UseGuards,
+} from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
-import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
-import { ProjectsService } from './projects.service';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { User } from '@asteai/types';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { RolesGuard } from '../../common/guards/roles.guard';
-import { User } from '@asteai/types';
+import { paginate } from '../../common/utils/pagination';
+import { CreateProjectDto, UpdateProjectStageDto } from './dto/project.dto';
+import { ProjectsService } from './projects.service';
+
+/** The 410 message for the retired PATCH /projects/:id/milestones/:milestoneId. */
+export const LEGACY_MILESTONES_GONE =
+  'Project milestones are retired; milestones and escrow are managed on the project contract: '
+  + 'POST /contracts/:id/milestones/:milestoneId/{fund|submit|request-revision|accept|release} (see GET /contracts).';
 
 @ApiTags('projects')
 @ApiBearerAuth()
@@ -15,8 +24,8 @@ export class ProjectsController {
   constructor(private readonly svc: ProjectsService) {}
 
   @Get('open')
-  findOpen(@Query('page') page = 1, @Query('pageSize') pageSize = 20) {
-    return this.svc.findOpen(+page, +pageSize);
+  findOpen(@Query('page') page?: string, @Query('pageSize') pageSize?: string) {
+    return this.svc.findOpen(paginate(page, pageSize));
   }
 
   @Get('mine')
@@ -32,30 +41,28 @@ export class ProjectsController {
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.svc.findOne(id);
+  findOne(@Param('id') id: string, @CurrentUser() user: User) {
+    return this.svc.findOne(id, user);
   }
 
   @Post()
   @Roles('Buyer')
-  create(@Body() body: any, @CurrentUser() user: User) {
+  create(@Body() body: CreateProjectDto, @CurrentUser() user: User) {
     return this.svc.create(body, user);
   }
 
   @Patch(':id/stage')
   @Roles('Buyer', 'Admin')
-  updateStage(@Param('id') id: string, @Body() body: { stage: string }, @CurrentUser() user: User) {
+  updateStage(@Param('id') id: string, @Body() body: UpdateProjectStageDto, @CurrentUser() user: User) {
     return this.svc.updateStage(id, body.stage, user);
   }
 
+  /**
+   * Retired: money and milestone state now live on contracts (POST /contracts/:id/milestones/:mid/…).
+   * projects.milestones is kept read-only as legacy data. No body is validated: every call is 410.
+   */
   @Patch(':id/milestones/:milestoneId')
-  @Roles('Buyer', 'Freelancer', 'Admin')
-  updateMilestone(
-    @Param('id') id: string,
-    @Param('milestoneId') mid: string,
-    @Body() body: { status: string },
-    @CurrentUser() user: User,
-  ) {
-    return this.svc.updateMilestone(id, mid, body.status, user);
+  updateMilestone(): never {
+    throw new GoneException(LEGACY_MILESTONES_GONE);
   }
 }

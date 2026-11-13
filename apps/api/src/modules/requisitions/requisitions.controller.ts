@@ -6,10 +6,12 @@ import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { RequisitionsService } from './requisitions.service';
 import { CreateRequisitionDto } from './dto/create-requisition.dto';
 import { UpdateRequisitionDto } from './dto/update-requisition.dto';
+import { RequisitionPostingDto } from './dto/posting.dto';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { RolesGuard } from '../../common/guards/roles.guard';
-import { User } from '@asteai/types';
+import { REQ_STATUSES, ReqStatus, User } from '@asteai/types';
+import { paginate } from '../../common/utils/pagination';
 
 @ApiTags('requisitions')
 @ApiBearerAuth()
@@ -24,10 +26,11 @@ export class RequisitionsController {
   findAll(
     @CurrentUser() user: User,
     @Query('status') status?: string,
-    @Query('page') page = 1,
-    @Query('pageSize') pageSize = 20,
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
   ) {
-    return this.svc.findAll(user, { status, page: +page, pageSize: +pageSize });
+    const validStatus = REQ_STATUSES.includes(status as ReqStatus) ? (status as ReqStatus) : undefined;
+    return this.svc.findAll(user, { status: validStatus, ...paginate(page, pageSize) });
   }
 
   @Get(':id')
@@ -53,6 +56,13 @@ export class RequisitionsController {
     @CurrentUser() user: User,
   ) {
     return this.svc.update(id, dto, user);
+  }
+
+  @Patch(':id/posting')
+  @Roles('Employer', 'Admin')
+  @ApiOperation({ summary: 'Publish to / hide from the public job board and set its pay, type and expiry' })
+  updatePosting(@Param('id') id: string, @Body() dto: RequisitionPostingDto, @CurrentUser() user: User) {
+    return this.svc.updatePosting(id, dto, user);
   }
 
   @Patch(':id/fund')

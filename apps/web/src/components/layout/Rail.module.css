@@ -63,3 +63,21 @@
     border-color: var(--blue);
   }
 }
+
+.soon {
+  cursor: default;
+  opacity: .5;
+}
+
+.soon:hover {
+  background: none;
+  color: var(--fg-2);
+}
+
+.soonTag {
+  margin-left: 6px;
+  font-family: var(--font-mono);
+  font-size: .6rem;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}

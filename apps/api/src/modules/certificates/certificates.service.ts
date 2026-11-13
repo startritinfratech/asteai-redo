@@ -80,8 +80,8 @@ export class CertificatesService {
         );
         if (res?.success && res.certificate_content) return { content: res.certificate_content, source: 'ai' };
         this.logger.warn(`AI returned no certificate content for ${row.id}`);
-      } catch (err: any) {
-        this.logger.warn(`Certificate content service unavailable for ${row.id}; using the assessment: ${err?.message}`);
+      } catch (err) {
+        this.logger.warn(`Certificate content service unavailable for ${row.id}; using the assessment: ${err instanceof Error ? err.message : err}`);
       }
     }
     return { content: certificateContentFromAssessment(row), source: 'assessment' };
@@ -102,9 +102,9 @@ export class CertificatesService {
           WHERE id = $1`,
         [id, JSON.stringify(content), source],
       );
-    } catch (err: any) {
+    } catch (err) {
       // A failed write must not cost the candidate the certificate; it is rebuilt next time.
-      this.logger.error(`Could not store certificate content for ${id}: ${err?.message}`);
+      this.logger.error(`Could not store certificate content for ${id}: ${err instanceof Error ? err.message : err}`);
     }
     return { row, content };
   }

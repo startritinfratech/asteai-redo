@@ -2,16 +2,13 @@
   "name": "@asteai/db",
   "version": "0.1.0",
   "private": true,
-  "main": "./src/index.ts",
-  "types": "./src/index.ts",
+  "type": "module",
   "scripts": {
-    "migrate": "node -r @swc-node/register src/migrate.ts",
-    "migrate:rollback": "node -r @swc-node/register src/migrate.ts rollback"
+    "migrate": "node migrate.mjs",
+    "migrate:status": "node migrate.mjs --status",
+    "seed": "bun seed.mjs"
   },
   "dependencies": {
     "pg": "^8.13.3"
-  },
-  "devDependencies": {
-    "typescript": "^5.4.5"
   }
 }

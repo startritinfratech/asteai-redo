@@ -62,16 +62,6 @@
   color: var(--fg-2);
 }
 
-.bell {
-  background: var(--bg-3);
-  border: 1px solid var(--line-2);
-  border-radius: 999px;
-  width: 36px;
-  height: 36px;
-  display: grid;
-  place-items: center;
-}
-
 .btn {
   display: inline-flex;
   align-items: center;

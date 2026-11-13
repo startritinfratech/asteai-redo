@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import useSWR from 'swr';
+import { errorMessage } from '@/lib/api';
 import { Panel, Button, Tag, Eyebrow, Empty, Field, PageHeader, Chips } from '@/components/ui';
 import {
   interviewsApi, statusTag, toNumber,
@@ -71,8 +72,8 @@ function SetupForm({ cat }: { cat: Catalogue }) {
         category, domain, skill: skill.trim(), summary: summary.trim() || undefined, language,
       });
       router.push(`/platform/studio/${interview.id}`);
-    } catch (e: any) {
-      setError(e?.message ?? 'Could not start the interview');
+    } catch (e) {
+      setError(errorMessage(e, 'Could not start the interview'));
       setBusy(false);
     }
   };

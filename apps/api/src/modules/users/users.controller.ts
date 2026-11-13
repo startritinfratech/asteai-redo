@@ -1,9 +1,13 @@
-import { Controller, Get, Put, Body, UseGuards } from '@nestjs/common';
+import { Controller, Get, Put, Post, Delete, Body, HttpCode, HttpStatus, UseGuards } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { AuthGuard } from '@nestjs/passport';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { UsersService } from './users.service';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { User } from '@asteai/types';
+import { UpdateProfileDto } from './dto/update-profile.dto';
+import { ToggleConsentDto } from './dto/toggle-consent.dto';
+import { DeleteAccountDto } from './dto/delete-account.dto';
 
 @ApiTags('users')
 @ApiBearerAuth()
@@ -18,10 +22,33 @@ export class UsersController {
   }
 
   @Put('me')
-  updateMe(
-    @CurrentUser() user: User,
-    @Body() body: { firstName?: string; lastName?: string; title?: string; avatarUrl?: string; lang?: string },
-  ) {
+  updateMe(@CurrentUser() user: User, @Body() body: UpdateProfileDto) {
     return this.svc.updateProfile(user.id, body);
+  }
+
+  @Get('me/consents')
+  getConsents(@CurrentUser() user: User) {
+    return this.svc.getConsents(user.id);
+  }
+
+  @Post('me/consents')
+  toggleConsent(@CurrentUser() user: User, @Body() body: ToggleConsentDto) {
+    return this.svc.toggleConsent(user.id, body.purpose, body.active);
+  }
+
+  /**
+   * Soft-deletes the account after checking the password: marks it deleted, anonymises the
+   * email (so the address can sign up again) and signs out every session.
+   */
+  @Delete('me')
+  @Throttle({ short: { ttl: 60_000, limit: 5 } })
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async deleteMe(@CurrentUser() user: User, @Body() body: DeleteAccountDto): Promise<void> {
+    await this.svc.deleteAccount(user.id, body.password);
+  }
+
+  @Post('me/export')
+  exportData(@CurrentUser() user: User) {
+    return this.svc.exportData(user.id);
   }
 }

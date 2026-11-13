@@ -1,81 +1,142 @@
-/**
- * auth.ts – Auth store using Zustand
- * Persists tokens to localStorage; exposes login/logout actions.
- */
 'use client';
 
+/**
+ * Auth store (Zustand). Holds the signed-in user; tokens live in lib/tokens.
+ * Only `user` is persisted, so a reload keeps the session without a round trip.
+ */
+import { useEffect, useState } from 'react';
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { api } from '@/lib/api';
-import type { User } from '@asteai/types';
+import type {
+  AuthTokensResponse, LoginResponse, TwoFactorChallengeResponse, User, UserRole,
+} from '@asteai/types';
+import { mutate } from 'swr';
+import { api, apiRequest, setSessionExpiredHandler } from '@/lib/api';
+import { tokenStorage } from '@/lib/tokens';
+
+export interface RegisterPayload {
+  email: string;
+  password: string;
+  firstName: string;
+  lastName: string;
+  role?: UserRole;
+  /** From POST /auth/email/verify-otp: proves the address, so the account starts verified. */
+  otpTicket?: string;
+}
 
 interface AuthState {
   user: User | null;
-  accessToken: string | null;
-  refreshToken: string | null;
   isLoading: boolean;
 
-  login: (email: string, password: string) => Promise<void>;
+  /**
+   * Signs in with email and password. Returns the user, or the 2FA challenge when the
+   * account has two-factor authentication on (then nothing is stored yet: finish with
+   * POST /auth/login/2fa and `setSession`).
+   */
+  login: (email: string, password: string) => Promise<User | TwoFactorChallengeResponse>;
+  /** Stores the tokens and user from any sign-in (login, register, 2FA, password change). */
+  setSession: (res: AuthTokensResponse) => User;
+  register: (payload: RegisterPayload) => Promise<User>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
-  setTokens: (access: string, refresh: string) => void;
+  clearSession: () => void;
+}
+
+/** Drops every cached SWR response so the next user never sees the previous user's data. */
+function clearSwrCache() {
+  void mutate(() => true, undefined, { revalidate: false });
 }
 
 export const useAuthStore = create<AuthState>()(
   persist(
     (set, get) => ({
-      user:         null,
-      accessToken:  null,
-      refreshToken: null,
-      isLoading:    false,
-
-      setTokens(access, refresh) {
-        set({ accessToken: access, refreshToken: refresh });
-        if (typeof window !== 'undefined') {
-          localStorage.setItem('accessToken', access);
-          localStorage.setItem('refreshToken', refresh);
-        }
-      },
+      user: null,
+      isLoading: false,
 
       async login(email, password) {
         set({ isLoading: true });
         try {
-          const res = await api.post<{ accessToken: string; refreshToken: string; user: User }>(
-            '/auth/login',
-            { email, password },
-          );
-          get().setTokens(res.accessToken, res.refreshToken);
-          if (typeof window !== 'undefined') {
-            localStorage.setItem('userId', res.user.id);
-          }
-          set({ user: res.user });
+          const res = await api.post<LoginResponse>('/auth/login', { email, password });
+          // Password accepted but a second factor is due: nothing is stored yet.
+          if ('twoFactorRequired' in res) return res;
+          return get().setSession(res);
+        } finally {
+          set({ isLoading: false });
+        }
+      },
+
+      setSession(res) {
+        tokenStorage.set({ accessToken: res.accessToken, refreshToken: res.refreshToken, userId: res.user.id });
+        set({ user: res.user });
+        return res.user;
+      },
+
+      async register(payload) {
+        set({ isLoading: true });
+        try {
+          return get().setSession(await api.post<AuthTokensResponse>('/auth/register', payload));
         } finally {
           set({ isLoading: false });
         }
       },
 
       async logout() {
+        // Snapshot the tokens, then sign out locally first so nothing (an expired
+        // access token, a slow network) can leave the user half signed in.
+        const { accessToken, refreshToken, userId } = tokenStorage.get();
+        tokenStorage.clear();
+        set({ user: null });
+        clearSwrCache();
+
+        // The API revokes refresh tokens with either the bearer token or, after the
+        // access token has expired, the {userId, refreshToken} pair in the body.
+        if (!userId && !accessToken) return;
         try {
-          await api.post('/auth/logout');
-        } catch {}
-        set({ user: null, accessToken: null, refreshToken: null });
-        ['accessToken', 'refreshToken', 'userId'].forEach(k => localStorage.removeItem(k));
+          await apiRequest('/auth/logout', {
+            method: 'POST',
+            body: userId && refreshToken ? { userId, refreshToken } : {},
+            headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
+          });
+        } catch {
+          // The server session may already be gone; the local sign-out above stands.
+        }
       },
 
       async refreshUser() {
         try {
-          const user = await api.get<User>('/users/me');
-          set({ user });
-        } catch {}
+          set({ user: await api.get<User>('/users/me') });
+        } catch {
+          // Leave the cached user; a 401 is handled by the session-expired handler.
+        }
+      },
+
+      clearSession() {
+        tokenStorage.clear();
+        set({ user: null });
+        clearSwrCache();
       },
     }),
     {
       name: 'asteai-auth',
-      partialize: (s) => ({
-        user:         s.user,
-        accessToken:  s.accessToken,
-        refreshToken: s.refreshToken,
-      }),
+      partialize: (s) => ({ user: s.user }),
     },
   ),
 );
+
+/**
+ * False during server render and the first client render, true once the persisted
+ * user has been read. Gate anything that depends on `user` on it to avoid hydration
+ * mismatches and premature redirects.
+ */
+export function useAuthHydrated(): boolean {
+  const [hydrated, setHydrated] = useState(false);
+  useEffect(() => {
+    const unsub = useAuthStore.persist.onFinishHydration(() => setHydrated(true));
+    if (useAuthStore.persist.hasHydrated()) setHydrated(true);
+    return unsub;
+  }, []);
+  return hydrated;
+}
+
+// When a refresh fails, drop the cached user so the shell's guard sends the user to sign in.
+setSessionExpiredHandler(() => useAuthStore.getState().clearSession());

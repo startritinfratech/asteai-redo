@@ -1,0 +1,99 @@
+.stage { max-width: 720px; margin: 0 auto; width: 100%; display: flex; flex-direction: column; gap: 14px; }
+.body { display: flex; flex-direction: column; gap: 14px; }
+.body h2 { margin: 0; font-family: var(--font-display); font-size: 1.25rem; }
+.body p { margin: 0; line-height: 1.55; }
+.top { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.meta { font-size: .8rem; color: var(--fg-2); }
+.note { font-size: .82rem; color: var(--fg-3); }
+.error { color: var(--rose); font-size: .88rem; }
+.row { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; }
+.link { color: var(--blue-2); align-self: center; }
+.prompt { font-size: 1.05rem; line-height: 1.45; }
+.mono { font-family: var(--font-mono); }
+.grow { flex: 1; min-width: 0; }
+
+/* Answer buttons */
+.opts { display: grid; gap: 8px; }
+.opt {
+  text-align: left; background: var(--bg-2); color: var(--fg); border: 1.5px solid var(--line-2);
+  border-radius: 10px; padding: 11px 13px; line-height: 1.4; font: inherit; cursor: pointer;
+}
+.opt:hover:not(:disabled) { border-color: var(--blue); }
+.opt:disabled { opacity: .55; cursor: progress; }
+.opt:focus-visible, .tileOpts button:focus-visible, .wire:focus-visible, .mv button:focus-visible {
+  outline: 2px solid var(--blue-2); outline-offset: 2px;
+}
+.ok { border-color: var(--mint); background: var(--mint-soft); }
+.no { border-color: var(--rose); background: var(--rose-soft); }
+
+/* Matrix */
+.matrix { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; max-width: 240px; }
+.tile { width: 100%; display: block; color: var(--blue-2); background: var(--bg-2); border: 1px solid var(--line); border-radius: 5px; }
+.missing {
+  display: grid; place-items: center; aspect-ratio: 1; border: 1px dashed var(--blue); border-radius: 5px;
+  color: var(--blue); font-family: var(--font-display); font-size: 1.8rem;
+}
+.tileOpts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; max-width: 360px; }
+.tileOpts button { padding: 0; border: 1.5px solid transparent; border-radius: 7px; background: none; cursor: pointer; }
+.tileOpts button:hover:not(:disabled) { border-color: var(--blue); }
+.tileOpts button:disabled { opacity: .55; }
+
+/* Digit span */
+.digit { font-family: var(--font-mono); font-size: 3rem; text-align: center; padding: 18px; color: var(--blue-2); min-height: 1.4em; }
+.field { display: flex; flex-direction: column; gap: 4px; font-size: .8rem; color: var(--fg-2); }
+.field input {
+  font: inherit; font-size: 1.3rem; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line-2);
+  background: var(--bg); color: var(--fg); min-width: 0;
+}
+.short { width: 110px; }
+.history { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 3px; font-size: .86rem; color: var(--fg-2); }
+
+/* Tables */
+.tableWrap { overflow-x: auto; }
+.table { border-collapse: collapse; width: 100%; font-size: .9rem; }
+.table th, .table td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--line); }
+.table th { color: var(--fg-3); font-weight: 500; font-size: .78rem; }
+.num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+
+/* Code */
+.code { margin: 0; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; font-size: .85rem; overflow-x: auto; }
+.ln { display: inline-block; width: 2ch; margin-right: 12px; color: var(--fg-3); text-align: right; }
+
+/* Schematic */
+.schematic { width: 100%; background: var(--bg-2); border: 1px solid var(--line); border-radius: 8px; }
+.box { fill: none; stroke: var(--blue-2); stroke-width: 2; }
+.boxText { fill: var(--fg-2); font-family: var(--font-mono); font-size: 11px; }
+.wire { fill: none; stroke: var(--blue-2); stroke-width: 5; cursor: pointer; }
+.wire:hover { stroke: var(--blue); stroke-width: 7; }
+.wireDashed { stroke: var(--gold); stroke-dasharray: 6 4; }
+
+/* Prioritise */
+.lines { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 5px; }
+.line {
+  display: flex; gap: 8px; align-items: center; border: 1px solid var(--line-2); border-radius: 9px;
+  padding: 7px 9px; background: var(--bg-2); font-size: .9rem;
+}
+.n { font-family: var(--font-mono); color: var(--fg-3); width: 2ch; }
+.mv { display: flex; gap: 4px; }
+.mv button {
+  width: 30px; height: 30px; border-radius: 6px; border: 1px solid var(--line-2); background: var(--bg-3);
+  color: var(--fg); cursor: pointer;
+}
+.mv button:disabled { opacity: .35; cursor: default; }
+
+/* Chat */
+.chat { display: flex; flex-direction: column; gap: 6px; }
+.chatPair { display: flex; flex-direction: column; gap: 6px; }
+.bub { max-width: 88%; padding: 9px 11px; border-radius: 11px; font-size: .9rem; }
+.them { align-self: flex-start; background: var(--bg-3); border: 1px solid var(--line-2); }
+.me { align-self: flex-end; background: var(--blue-soft); border: 1px solid var(--blue); }
+
+/* Likert */
+.likert { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
+.likert .opt { text-align: center; padding: 10px 6px; font-size: .85rem; }
+
+@media (max-width: 560px) {
+  .likert { grid-template-columns: 1fr; }
+  .likert .opt { text-align: left; }
+  .tileOpts { grid-template-columns: repeat(2, minmax(0, 1fr)); max-width: 240px; }
+}

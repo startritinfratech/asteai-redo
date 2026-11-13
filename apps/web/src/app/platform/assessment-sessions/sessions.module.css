@@ -1,0 +1,16 @@
+.page { display: flex; flex-direction: column; gap: 16px; }
+.list { display: flex; flex-direction: column; gap: 8px; }
+.row { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 12px; }
+.main { flex: 1; min-width: 240px; display: flex; flex-direction: column; gap: 4px; }
+.title { font-weight: 600; }
+.meta { font-size: .8rem; color: var(--fg-2); overflow-wrap: anywhere; }
+.side { display: flex; align-items: center; gap: 10px; }
+.form { flex-basis: 100%; display: flex; flex-direction: column; gap: 6px; border-top: 1px solid var(--line); padding-top: 10px; }
+.form label { font-size: .8rem; color: var(--fg-2); }
+.form textarea {
+  font: inherit; font-size: .9rem; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line-2);
+  background: var(--bg); color: var(--fg); resize: vertical;
+}
+.form textarea:focus-visible { outline: 2px solid var(--blue-2); outline-offset: 1px; }
+.actions { display: flex; gap: 8px; }
+.error { color: var(--rose); font-size: .85rem; margin: 0; }

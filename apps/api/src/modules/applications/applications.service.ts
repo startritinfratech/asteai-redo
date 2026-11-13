@@ -1,86 +1,117 @@
-import { Injectable, Inject, NotFoundException, ForbiddenException } from '@nestjs/common';
-import { randomUUID } from 'crypto';
+import { Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { Pool } from 'pg';
-import { DB_POOL } from '../../database/database.module';
-import { User, ApplicationStage } from '@asteai/types';
+import type { ApplicationStage, User } from '@asteai/types';
+import { DB_POOL, withTransaction } from '../../database/database.module';
+import { assertTenantAccess } from '../../common/utils/access';
+import { generateId } from '../../common/utils/ids';
+import { ApplicationRow, mapApplicationRow } from './application.mapper';
+import { AddScorecardDto } from './dto/application.dto';
 
 @Injectable()
 export class ApplicationsService {
   constructor(@Inject(DB_POOL) private readonly db: Pool) {}
 
   async findForRequisition(reqId: string, user: User) {
-    const { rows } = await this.db.query(
-      `SELECT a.*, u.first_name || ' ' || u.last_name AS candidate_name,
-              u.email AS candidate_email
-       FROM applications a
-       JOIN user_accounts u ON a.candidate_id = u.id
-       WHERE a.requisition_id = $1
-       ORDER BY a.created_at DESC`,
+    const { rows: reqRows } = await this.db.query<{ tenant_id: string }>(
+      `SELECT tenant_id FROM requisitions WHERE id = $1`,
       [reqId],
     );
-    return rows;
+    if (!reqRows.length) throw new NotFoundException('Requisition not found');
+    assertTenantAccess(user, reqRows[0].tenant_id);
+
+    const { rows } = await this.db.query<ApplicationRow>(
+      `SELECT a.*, CONCAT_WS(' ', u.first_name, u.last_name) AS candidate_name,
+              u.email AS candidate_email
+         FROM applications a
+         JOIN user_accounts u ON a.candidate_id = u.id
+        WHERE a.requisition_id = $1
+        ORDER BY a.created_at DESC`,
+      [reqId],
+    );
+    return rows.map(mapApplicationRow);
   }
 
+  /** Candidates see their own applications; employers only those made to their tenant. */
   async findForCandidate(candidateId: string, user: User) {
-    if (user.role === 'Candidate' && user.id !== candidateId) throw new ForbiddenException();
-    const { rows } = await this.db.query(
+    const params: unknown[] = [candidateId];
+    let scope = '';
+    if (user.role === 'Candidate') {
+      if (user.id !== candidateId) return [];
+    } else if (user.role !== 'Admin') {
+      if (!user.tenantId) return [];
+      params.push(user.tenantId);
+      scope = 'AND a.tenant_id = $2';
+    }
+    const { rows } = await this.db.query<ApplicationRow>(
       `SELECT a.*, r.title AS req_title, r.industry, r.tier
-       FROM applications a
-       JOIN requisitions r ON a.requisition_id = r.id
-       WHERE a.candidate_id = $1
-       ORDER BY a.created_at DESC`,
-      [candidateId],
+         FROM applications a
+         JOIN requisitions r ON a.requisition_id = r.id
+        WHERE a.candidate_id = $1 ${scope}
+        ORDER BY a.created_at DESC`,
+      params,
     );
-    return rows;
+    return rows.map(mapApplicationRow);
   }
 
   async apply(reqId: string, candidateId: string) {
-    // Prevent duplicate applications
-    const existing = await this.db.query(
-      `SELECT id FROM applications WHERE requisition_id = $1 AND candidate_id = $2`,
-      [reqId, candidateId],
-    );
-    if (existing.rows.length) return existing.rows[0];
-
-    const { rows: reqRows } = await this.db.query(
-      `SELECT id, tenant_id FROM requisitions WHERE id = $1`,
+    // An expired public posting no longer takes applications (the board already hides it).
+    const { rows: reqRows } = await this.db.query<{ tenant_id: string; status: string }>(
+      `SELECT tenant_id, status FROM requisitions WHERE id = $1 AND (expires_at IS NULL OR expires_at > NOW())`,
       [reqId],
     );
-    if (!reqRows.length) throw new NotFoundException(`Requisition not found`);
+    if (!reqRows.length || reqRows[0].status !== 'Open') {
+      throw new NotFoundException('Requisition not found or not open for applications');
+    }
 
-    const id = 'A-' + Math.random().toString(36).slice(2, 8).toUpperCase();
     const history = JSON.stringify([{ t: Date.now(), stage: 'Applied', by: 'system' }]);
-
-    const { rows } = await this.db.query(
+    // Idempotent: a second apply (even a concurrent one) returns the existing application.
+    const { rows } = await this.db.query<ApplicationRow>(
       `INSERT INTO applications (id, candidate_id, requisition_id, tenant_id, stage, history)
        VALUES ($1, $2, $3, $4, 'Applied', $5::jsonb)
+       ON CONFLICT (requisition_id, candidate_id) DO NOTHING
        RETURNING *`,
-      [id, candidateId, reqId, reqRows[0].tenant_id, history],
+      [generateId('A'), candidateId, reqId, reqRows[0].tenant_id, history],
     );
-    return rows[0];
+    if (!rows.length) {
+      const existing = await this.db.query<ApplicationRow>(
+        `SELECT * FROM applications WHERE requisition_id = $1 AND candidate_id = $2`,
+        [reqId, candidateId],
+      );
+      return mapApplicationRow(existing.rows[0]);
+    }
+    return mapApplicationRow(rows[0]);
   }
 
   async advanceStage(appId: string, stage: ApplicationStage, byName: string, user: User) {
-    const { rows } = await this.db.query(`SELECT * FROM applications WHERE id = $1`, [appId]);
-    if (!rows.length) throw new NotFoundException();
+    return withTransaction(this.db, async (client) => {
+      const { rows } = await client.query<ApplicationRow>(
+        `SELECT * FROM applications WHERE id = $1 FOR UPDATE`,
+        [appId],
+      );
+      if (!rows.length) throw new NotFoundException('Application not found');
+      assertTenantAccess(user, rows[0].tenant_id);
 
-    const app = rows[0];
-    const history = [...(app.history ?? []), { t: Date.now(), stage, by: byName }];
-
-    const { rows: updated } = await this.db.query(
-      `UPDATE applications SET stage = $1, history = $2::jsonb, updated_at = NOW()
-       WHERE id = $3 RETURNING *`,
-      [stage, JSON.stringify(history), appId],
-    );
-    return updated[0];
+      const history = [...(rows[0].history ?? []), { t: Date.now(), stage, by: byName }];
+      const { rows: updated } = await client.query<ApplicationRow>(
+        `UPDATE applications SET stage = $1, history = $2::jsonb, updated_at = NOW()
+          WHERE id = $3 RETURNING *`,
+        [stage, JSON.stringify(history), appId],
+      );
+      return mapApplicationRow(updated[0]);
+    });
   }
 
-  async addScorecard(appId: string, data: { score: number; note: string }, user: User) {
-    const id = randomUUID();
+  async addScorecard(appId: string, data: AddScorecardDto, user: User) {
+    const { rows: appRows } = await this.db.query<{ tenant_id: string }>(
+      `SELECT tenant_id FROM applications WHERE id = $1`,
+      [appId],
+    );
+    if (!appRows.length) throw new NotFoundException('Application not found');
+    assertTenantAccess(user, appRows[0].tenant_id);
+
     await this.db.query(
-      `INSERT INTO scorecards (id, application_id, scored_by, score, note)
-       VALUES ($1, $2, $3, $4, $5)`,
-      [id, appId, user.id, data.score, data.note],
+      `INSERT INTO scorecards (application_id, scored_by, score, note) VALUES ($1, $2, $3, $4)`,
+      [appId, user.id, data.score, data.note],
     );
     const { rows } = await this.db.query(
       `SELECT * FROM scorecards WHERE application_id = $1 ORDER BY created_at DESC`,

@@ -71,23 +71,32 @@ export class AiService {
    * POST to deeptech_ai. `userToken` is an AI session token when the endpoint wants
    * the user (e.g. /mock-interview/start); the API key is always sent.
    */
-  async post<T>(path: string, body: unknown, userToken?: string, timeoutMs = 30_000): Promise<T> {
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      'x-api-key': this.apiKey,
-    };
+  post<T>(path: string, body: unknown, userToken?: string, timeoutMs = 30_000): Promise<T> {
+    return this.request<T>('POST', path, body, userToken, timeoutMs);
+  }
+
+  /** GET from deeptech_ai with the service API key. */
+  get<T>(path: string, timeoutMs = 30_000): Promise<T> {
+    return this.request<T>('GET', path, undefined, undefined, timeoutMs);
+  }
+
+  private async request<T>(
+    method: 'GET' | 'POST', path: string, body: unknown, userToken: string | undefined, timeoutMs: number,
+  ): Promise<T> {
+    const headers: Record<string, string> = { 'x-api-key': this.apiKey };
+    if (body !== undefined) headers['Content-Type'] = 'application/json';
     if (userToken) headers.Authorization = `Bearer ${userToken}`;
 
     let res: Response;
     try {
       res = await fetch(`${this.baseUrl}${path}`, {
-        method: 'POST',
+        method,
         headers,
-        body: JSON.stringify(body),
+        body: body === undefined ? undefined : JSON.stringify(body),
         signal: AbortSignal.timeout(timeoutMs),
       });
-    } catch (err: any) {
-      this.logger.error(`AI service unreachable on ${path}: ${err?.message ?? err}`);
+    } catch (err) {
+      this.logger.error(`AI service unreachable on ${path}: ${err instanceof Error ? err.message : err}`);
       throw new BadGatewayException('The AI interview service is unreachable');
     }
 

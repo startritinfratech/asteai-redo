@@ -6,6 +6,7 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { User } from '@asteai/types';
+import { SubmitProposalDto } from './dto/submit-proposal.dto';
 
 @ApiTags('proposals')
 @ApiBearerAuth()
@@ -16,7 +17,9 @@ export class ProposalsController {
 
   @Get('project/:projectId')
   @Roles('Buyer', 'Admin')
-  forProject(@Param('projectId') id: string) { return this.svc.findForProject(id); }
+  forProject(@Param('projectId') id: string, @CurrentUser() user: User) {
+    return this.svc.findForProject(id, user);
+  }
 
   @Get('mine')
   @Roles('Freelancer')
@@ -24,7 +27,7 @@ export class ProposalsController {
 
   @Post()
   @Roles('Freelancer')
-  submit(@Body() body: { projectId: string; price: number; days: number; note?: string }, @CurrentUser() user: User) {
+  submit(@Body() body: SubmitProposalDto, @CurrentUser() user: User) {
     return this.svc.submit(body, user);
   }
 

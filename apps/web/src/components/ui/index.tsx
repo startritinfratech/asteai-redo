@@ -2,33 +2,39 @@
  * UI primitives – small className-based components that map 1:1
  * to the design system CSS variables from the original index.html.
  */
+import React from 'react';
 import { clsx } from 'clsx';
 import styles from './ui.module.css';
+import kit from './kit.module.css';
 
 // ── Panel ────────────────────────────────────────────────────────────────────
 export function Panel({
-  children, className,
-}: { children: React.ReactNode; className?: string }) {
-  return <div className={clsx(styles.panel, className)}>{children}</div>;
+  children, className, style,
+}: { children: React.ReactNode; className?: string; style?: React.CSSProperties }) {
+  return <div style={style} className={clsx(styles.panel, className)}>{children}</div>;
 }
 
 // ── Button ───────────────────────────────────────────────────────────────────
 type BtnVariant = 'default' | 'primary' | 'mint' | 'rose' | 'sm';
 
 export function Button({
-  children, variant = 'default', disabled, onClick, type = 'button', className,
+  children, variant = 'default', variantSize, disabled, onClick, type = 'button', className, style,
 }: {
   children: React.ReactNode;
   variant?: BtnVariant | BtnVariant[];
+  variantSize?: string;
   disabled?: boolean;
   onClick?: () => void;
   type?: 'button' | 'submit' | 'reset';
   className?: string;
+  style?: React.CSSProperties;
 }) {
   const variants = Array.isArray(variant) ? variant : [variant];
+  const isSm = variants.includes('sm') || variantSize === 'sm';
   return (
     <button
       type={type}
+      style={style}
       disabled={disabled}
       onClick={onClick}
       className={clsx(
@@ -36,7 +42,7 @@ export function Button({
         variants.includes('primary') && styles.pri,
         variants.includes('mint')    && styles.mint,
         variants.includes('rose')    && styles.rose,
-        variants.includes('sm')      && styles.sm,
+        isSm                         && styles.sm,
         className,
       )}
     >
@@ -46,7 +52,7 @@ export function Button({
 }
 
 // ── Tag ──────────────────────────────────────────────────────────────────────
-type TagColor = 'default' | 'gold' | 'mint' | 'rose' | 'amber' | 'grey';
+export type TagColor = 'default' | 'gold' | 'mint' | 'rose' | 'amber' | 'grey';
 
 export function Tag({
   children, color = 'default',
@@ -97,14 +103,31 @@ export function Bar({ value, max = 10, variant }: { value: number; max?: number;
 }
 
 // ── Field ─────────────────────────────────────────────────────────────────────
+/**
+ * A labelled form control. When `children` is a single element the label is tied
+ * to it with `htmlFor` (reusing the control's own `id` if it has one); otherwise the
+ * label wraps the children so the association is implicit.
+ */
 export function Field({
   label, children,
 }: { label: string; children: React.ReactNode }) {
+  const generatedId = React.useId();
+  const only = React.Children.count(children) === 1 && React.isValidElement(children) ? children : null;
+  if (only) {
+    const props = only.props as { id?: string };
+    const id = props.id ?? generatedId;
+    return (
+      <div className={styles.field}>
+        <label htmlFor={id}>{label}</label>
+        {props.id ? only : React.cloneElement(only as React.ReactElement<{ id?: string }>, { id })}
+      </div>
+    );
+  }
   return (
-    <div className={styles.field}>
-      <label>{label}</label>
+    <label className={styles.field}>
+      <span>{label}</span>
       {children}
-    </div>
+    </label>
   );
 }
 
@@ -174,3 +197,49 @@ export function CertCard({ children }: { children: React.ReactNode }) {
 export function Hash({ children }: { children: React.ReactNode }) {
   return <span className={styles.hash}>{children}</span>;
 }
+
+// ── Stepper ───────────────────────────────────────────────────────────────────
+/** Ordered progress through a multi-step form; the current step carries aria-current. */
+export function Stepper({ steps, current }: { steps: readonly string[]; current: number }) {
+  return (
+    <ol className={kit.stepper} aria-label="Progress">
+      {steps.map((s, i) => (
+        <li
+          key={s}
+          className={clsx(kit.step, i < current && kit.stepDone, i === current && kit.stepOn)}
+          aria-current={i === current ? 'step' : undefined}
+        >
+          <span className={kit.stepNum} aria-hidden="true">{i < current ? '✓' : i + 1}</span>
+          <span>{s}</span>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+// ── Skeleton ──────────────────────────────────────────────────────────────────
+export function Skeleton({ width, height = 16, radius, className }: {
+  width?: number | string; height?: number | string; radius?: number | string; className?: string;
+}) {
+  return <span aria-hidden="true" className={clsx(kit.skeleton, className)} style={{ width, height, borderRadius: radius }} />;
+}
+
+// ── Empty state (richer than Empty) ───────────────────────────────────────────
+export function EmptyState({ title, children, action, icon }: {
+  title: string; children?: React.ReactNode; action?: React.ReactNode; icon?: React.ReactNode;
+}) {
+  return (
+    <div className={kit.emptyState}>
+      {icon && <div className={kit.emptyIcon} aria-hidden="true">{icon}</div>}
+      <h3 className={kit.emptyTitle}>{title}</h3>
+      {children && <p className={kit.emptyBody}>{children}</p>}
+      {action && <div className={kit.emptyAction}>{action}</div>}
+    </div>
+  );
+}
+
+export {
+  Accordion, Dialog, Honeypot, OtpInput, PasswordField, Tabs, ThemeToggle, ToastProvider, useToast,
+  DEFAULT_PASSWORD_RULES, passwordMeetsRules,
+} from './kit';
+export type { AccordionItem, DialogProps, PasswordRule, TabItem } from './kit';

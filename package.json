@@ -4,12 +4,14 @@
   "private": true,
   "workspaces": ["apps/*", "packages/*"],
   "scripts": {
-    "dev": "bun run --filter @asteai/api dev & bun run --filter @asteai/web dev",
+    "dev": "node scripts/dev.mjs",
     "dev:api": "bun run --filter @asteai/api dev",
     "dev:web": "bun run --filter @asteai/web dev",
     "build": "bun run --filter '*' build",
     "lint": "bun run --filter '*' lint",
     "typecheck": "bun run --filter '*' typecheck",
+    "test": "bun run --filter '*' test",
+    "seed": "bun run --filter @asteai/db seed",
     "setup": "bash scripts/dev-setup.sh"
   }
 }

@@ -1,4 +1,4 @@
-import { IsEmail, IsString, MinLength, IsEnum, IsOptional } from 'class-validator';
+import { IsEmail, IsString, MinLength, MaxLength, IsEnum, IsOptional } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 import { UserRole } from '@asteai/types';
 
@@ -24,4 +24,10 @@ export class RegisterDto {
   @IsString()
   @MinLength(8)
   password: string;
+
+  @ApiProperty({ required: false, description: 'From POST /auth/email/verify-otp. Proves the email address; required when SIGNUP_REQUIRE_OTP=true.' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(2000)
+  otpTicket?: string;
 }
