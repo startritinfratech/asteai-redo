@@ -13,7 +13,8 @@ import type { FundMilestoneCheckout } from './types';
 const SCRIPT_SRC = 'https://checkout.razorpay.com/v1/checkout.js';
 
 interface RazorpaySuccess {
-  razorpay_order_id: string;
+  razorpay_order_id?: string;
+  razorpay_subscription_id?: string;
   razorpay_payment_id: string;
   razorpay_signature: string;
 }
@@ -60,11 +61,16 @@ export function loadRazorpayCheckout(): Promise<RazorpayConstructor> {
   return loading;
 }
 
-export interface CheckoutDetails {
-  orderId: string;
-  /** Minor units (paise), exactly as the API's order. */
-  amount: number;
-  currency: string;
+/**
+ * One-off payments pass the API's order (`orderId`, `amount`, `currency`); a recurring
+ * plan passes the API's Razorpay `subscriptionId` instead (Razorpay knows its amount).
+ */
+export type CheckoutDetails = CheckoutCommon & (
+  | { orderId: string; /** Minor units (paise), exactly as the API's order. */ amount: number; currency: string; subscriptionId?: never }
+  | { subscriptionId: string; orderId?: never; amount?: never; currency?: never }
+);
+
+interface CheckoutCommon {
   keyId: string;
   name: string;
   description: string;
@@ -72,17 +78,18 @@ export interface CheckoutDetails {
 }
 
 export type CheckoutResult =
-  | { kind: 'paid'; orderId: string; paymentId: string; signature: string }
+  | { kind: 'paid'; orderId?: string; subscriptionId?: string; paymentId: string; signature: string }
   | { kind: 'dismissed' }
   | { kind: 'failed'; message: string };
 
 /** The options object Razorpay Checkout takes (without the callbacks). */
 export function checkoutOptions(d: CheckoutDetails): Record<string, unknown> {
+  const what = d.subscriptionId !== undefined
+    ? { subscription_id: d.subscriptionId }
+    : { order_id: d.orderId, amount: d.amount, currency: d.currency };
   return {
     key: d.keyId,
-    order_id: d.orderId,
-    amount: d.amount,
-    currency: d.currency,
+    ...what,
     name: d.name,
     description: d.description.slice(0, 255),
     prefill: { name: d.prefill?.name ?? '', email: d.prefill?.email ?? '' },
@@ -103,7 +110,11 @@ export async function openCheckout(d: CheckoutDetails): Promise<CheckoutResult> 
     const rzp = new Razorpay({
       ...checkoutOptions(d),
       handler: (res: RazorpaySuccess) => settle({
-        kind: 'paid', orderId: res.razorpay_order_id, paymentId: res.razorpay_payment_id, signature: res.razorpay_signature,
+        kind: 'paid',
+        orderId: res.razorpay_order_id,
+        subscriptionId: res.razorpay_subscription_id,
+        paymentId: res.razorpay_payment_id,
+        signature: res.razorpay_signature,
       }),
       modal: {
         ondismiss: () => settle(lastError ? { kind: 'failed', message: lastError } : { kind: 'dismissed' }),
@@ -143,7 +154,7 @@ export async function payWithRazorpay(
   });
   if (result.kind !== 'paid') return result;
   try {
-    await paymentsApi.verifyRazorpay({ orderId: result.orderId, paymentId: result.paymentId, signature: result.signature });
+    await paymentsApi.verifyRazorpay({ orderId: result.orderId ?? checkout.orderId, paymentId: result.paymentId, signature: result.signature });
     return { kind: 'captured' };
   } catch {
     // Paid at Razorpay, but our confirmation did not go through; the webhook will capture it.

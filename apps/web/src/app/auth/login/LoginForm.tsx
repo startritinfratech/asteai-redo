@@ -8,6 +8,7 @@ import { ROLE_HOME, safeNext } from '@/lib/routes';
 import { useAuthHydrated, useAuthStore } from '@/store/auth';
 import { isTwoFactorChallenge } from '@/features/account/api';
 import { EMAIL_RE, PasswordInput, Spinner, authErrorMessage } from '../_components/shared';
+import { OAUTH_ERRORS, OAuthButtons } from '../_components/OAuthButtons';
 import { TwoFactorStep } from '../2fa/TwoFactorStep';
 import step from '../2fa/step.module.css';
 import styles from '../auth.module.css';
@@ -40,11 +41,14 @@ function useDemoLogins(): DemoLogins | null {
 
 type Errors = { email?: string; password?: string };
 
+
 export function LoginForm() {
   const router = useRouter();
-  const next = safeNext(useSearchParams().get('next'));
+  const searchParams = useSearchParams();
+  const next = safeNext(searchParams.get('next'));
   const user = useAuthStore((s) => s.user);
   const login = useAuthStore((s) => s.login);
+  const refreshUser = useAuthStore((s) => s.refreshUser);
   const hydrated = useAuthHydrated();
   const id = useId();
   const demo = useDemoLogins();
@@ -59,6 +63,36 @@ export function LoginForm() {
   const [challenge, setChallenge] = useState<string | null>(null);
   const emailRef = useRef<HTMLInputElement>(null);
   const formErrorRef = useRef<HTMLDivElement>(null);
+
+  // Back from Google / GitHub: signed in (cookies set), a 2FA challenge in the URL
+  // fragment (never sent to a server), or an error code.
+  useEffect(() => {
+    const hash = new URLSearchParams(window.location.hash.slice(1));
+    const oauthChallenge = hash.get('challenge');
+    if (oauthChallenge) {
+      window.history.replaceState(null, '', window.location.pathname + window.location.search);
+      setChallenge(oauthChallenge);
+      return;
+    }
+    const oauthError = searchParams.get('oauth_error');
+    if (oauthError) {
+      setFormError(OAUTH_ERRORS[oauthError] ?? 'Sign-in failed. Please try again.');
+      return;
+    }
+    if (searchParams.get('oauth') === 'success') {
+      setPending(true);
+      void refreshUser().then(() => {
+        const signedIn = useAuthStore.getState().user;
+        if (signedIn) router.replace(next ?? ROLE_HOME[signedIn.role]);
+        else {
+          setPending(false);
+          setFormError('Sign-in failed. Please try again.');
+        }
+      });
+    }
+    // Runs once per arrival; the query string does not change while this form is open.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   function validate(): Errors {
     const e: Errors = {};
@@ -144,6 +178,8 @@ export function LoginForm() {
           </div>
         </div>
       )}
+
+      <OAuthButtons next={next} divider="or sign in with email" />
 
       <form className={styles.form} onSubmit={onSubmit} noValidate>
         {formError && (

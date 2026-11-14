@@ -2,7 +2,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { BadRequestException, ForbiddenException } from '@nestjs/common';
 import type { User } from '@asteai/types';
-import { fakeDb } from '../../test-support/fakes';
+import { fakeDb, fakeEmail } from '../../test-support/fakes';
 import { RequisitionsService } from './requisitions.service';
 
 const owner = { id: 'u-owner', role: 'Employer', tenantId: 'T1' } as User;
@@ -22,7 +22,7 @@ function setup(existing = reqRow()) {
     [/WHERE r\.id = \$1/, [existing]],
     [/UPDATE requisitions SET\s+is_public/, (p) => [{ ...existing, is_public: p[1] ?? existing.is_public, published_at: new Date('2026-11-12T00:00:00Z') }]],
   ]);
-  return { db, svc: new RequisitionsService(db.pool) };
+  return { db, svc: new RequisitionsService(db.pool, fakeEmail().svc) };
 }
 
 describe('RequisitionsService.updatePosting', () => {

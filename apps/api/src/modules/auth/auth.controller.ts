@@ -1,9 +1,10 @@
 import {
-  Body, Controller, HttpCode, HttpStatus, Post, Req, UnauthorizedException, UseGuards,
+  Body, Controller, HttpCode, HttpStatus, Post, Req, Res, UnauthorizedException, UseGuards, UseInterceptors,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { ApiBody, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { AuthGuard } from '@nestjs/passport';
-import { Request } from 'express';
+import { Request, Response } from 'express';
 import { Throttle } from '@nestjs/throttler';
 import { AuthService, sessionMetaFrom } from './auth.service';
 import { TwoFactorService } from './two-factor.service';
@@ -16,15 +17,23 @@ import { SignupOtpService } from './signup-otp.service';
 import { OptionalJwtGuard } from './optional-jwt.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { User } from '@asteai/types';
+import { SessionCookieInterceptor } from './session-cookie.interceptor';
+import { clearSessionCookies, cookieSettings, readRefreshCookie, type CookieSettings } from './session-cookies';
 
 @ApiTags('auth')
 @Controller('auth')
+@UseInterceptors(SessionCookieInterceptor)
 export class AuthController {
+  private readonly cookies: CookieSettings;
+
   constructor(
     private readonly auth: AuthService,
     private readonly twoFactor: TwoFactorService,
     private readonly signupOtp: SignupOtpService,
-  ) {}
+    config: ConfigService,
+  ) {
+    this.cookies = cookieSettings(config);
+  }
 
   @Post('register')
   @ApiOperation({ summary: 'Register a new user account' })
@@ -62,28 +71,45 @@ export class AuthController {
     return this.twoFactor.startLogin(req.user, sessionMetaFrom(req));
   }
 
+  /** The refresh cookie (browsers) or `{ userId, refreshToken }` (other clients). */
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Exchange a refresh token for new tokens' })
-  async refresh(@Body() body: RefreshTokenDto) {
-    return this.auth.refreshTokens(body.userId, body.refreshToken);
+  @ApiOperation({ summary: 'Rotate the session: new access + refresh cookies' })
+  async refresh(@Body() body: RefreshTokenDto, @Req() req: Request) {
+    const creds = body.userId && body.refreshToken
+      ? { userId: body.userId, refreshToken: body.refreshToken }
+      : readRefreshCookie(req);
+    if (!creds) throw new UnauthorizedException('Invalid or expired refresh token');
+    return this.auth.refreshTokens(creds.userId, creds.refreshToken);
   }
 
   /**
-   * With a valid bearer token: revokes all of the user's refresh tokens. Without one
-   * (the access token expired), `{ userId, refreshToken }` revokes that refresh token.
+   * Always 204 and always clears the session cookies. With a valid access token every
+   * refresh token of the user is revoked (as before); otherwise only the refresh token
+   * from the cookie (or body). Idempotent: unknown or already revoked tokens are ignored.
    */
   @Post('logout')
   @UseGuards(OptionalJwtGuard)
   @Throttle({ short: { ttl: 60_000, limit: 20 } })
   @HttpCode(HttpStatus.NO_CONTENT)
-  @ApiOperation({ summary: 'Revoke the refresh tokens of the current user, or the one given' })
-  async logout(@CurrentUser() user: User | null, @Body() body: LogoutDto) {
-    if (user) {
-      await this.auth.logout(user.id);
-      return;
+  @ApiOperation({ summary: 'Sign out: revoke the session and clear its cookies' })
+  async logout(
+    @CurrentUser() user: User | null,
+    @Body() body: LogoutDto,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<void> {
+    try {
+      if (user) {
+        await this.auth.logout(user.id);
+        return;
+      }
+      const creds = body.userId && body.refreshToken
+        ? { userId: body.userId, refreshToken: body.refreshToken }
+        : readRefreshCookie(req);
+      if (creds) await this.auth.revokeRefreshToken(creds.userId, creds.refreshToken);
+    } finally {
+      clearSessionCookies(res, this.cookies);
     }
-    if (!body.userId || !body.refreshToken) throw new UnauthorizedException();
-    await this.auth.revokeRefreshToken(body.userId, body.refreshToken);
   }
 }

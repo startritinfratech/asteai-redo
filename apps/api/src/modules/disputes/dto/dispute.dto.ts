@@ -7,6 +7,17 @@ import {
   type DisputeReasonCode, type DisputeResolution, type DisputeStatus,
 } from '@asteai/types';
 
+/** POST /contracts/:id/milestones/:mid/dispute (the contract and milestone come from the path). */
+export class MilestoneDisputeDto {
+  @ApiProperty({ enum: DISPUTE_REASON_CODES })
+  @IsIn(DISPUTE_REASON_CODES as readonly string[]) reasonCode: DisputeReasonCode;
+
+  @ApiProperty() @IsString() @MinLength(10) @MaxLength(DISPUTE_LIMITS.description) description: string;
+
+  @ApiProperty({ required: false })
+  @IsOptional() @IsNumber({ maxDecimalPlaces: 2 }) @Min(0.01) @Max(1e10) amountInDispute?: number;
+}
+
 /** POST /disputes */
 export class CreateDisputeDto {
   @ApiProperty() @IsString() @MaxLength(32) contractId: string;

@@ -239,3 +239,24 @@
   white-space: nowrap;
   border: 0;
 }
+
+.oauth { display: flex; flex-direction: column; gap: 8px; }
+.oauthButton {
+  min-height: 44px;
+  padding: 10px 16px;
+  border-radius: 999px;
+  border: 1px solid var(--line-2);
+  background: var(--bg);
+  color: var(--fg);
+  font-weight: 600;
+  font-size: .92rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+}
+.oauthButton:hover { border-color: var(--blue); }
+.divider { display: flex; align-items: center; gap: 10px; color: var(--fg-3); font-size: .8rem; }
+.divider::before, .divider::after { content: ''; flex: 1; border-top: 1px solid var(--line-2); }
+.oauthNote { margin: 0; text-align: center; color: var(--fg-3); font-size: .8rem; line-height: 1.5; }
+.oauthNote a { color: var(--blue-2); }

@@ -31,6 +31,13 @@ export class ProposalsController {
     return this.svc.submit(body, user);
   }
 
+  /** Awarded proposal with a SOW → the POST /contracts body (milestones from the SOW). */
+  @Get(':id/contract-draft')
+  @Roles('Buyer', 'Admin')
+  contractDraft(@Param('id') id: string, @CurrentUser() user: User) {
+    return this.svc.contractDraft(id, user);
+  }
+
   @Patch(':id/award')
   @Roles('Buyer')
   award(@Param('id') id: string, @CurrentUser() user: User) {

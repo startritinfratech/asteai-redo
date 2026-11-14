@@ -11,12 +11,12 @@ bun install
 cp apps/api/.env.example apps/api/.env.local
 cp apps/web/.env.example apps/web/.env.local
 
-# Run DB migrations (applies each packages/db/migrations/*.sql once)
-DATABASE_URL=postgres://... bun run --filter @asteai/db migrate
-
-# Dev servers
+# Dev servers (the API auto-runs pending DB migrations before startup)
 bun run dev:api   # :3001
 bun run dev:web   # :3000
+
+# Optional: run migrations manually at any time
+DATABASE_URL=postgres://... bun run --filter @asteai/db migrate
 ```
 
 Swagger: http://localhost:3001/api/docs

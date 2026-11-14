@@ -3,9 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "bun run --filter @asteai/types build && tsc -p tsconfig.build.json && node --env-file=.env.local dist/apps/api/src/main.js",
+    "dev": "bun run --filter @asteai/db migrate && bun run --filter @asteai/types build && tsc -p tsconfig.build.json && node --env-file=.env.local dist/apps/api/src/main.js",
     "build": "bun run --filter @asteai/types build && tsc -p tsconfig.build.json",
-    "start": "node dist/apps/api/src/main.js",
+    "start": "bun run --filter @asteai/db migrate && node dist/apps/api/src/main.js",
     "lint": "eslint src",
     "typecheck": "tsc --noEmit",
     "test": "node --import reflect-metadata --import tsx --test \"src/**/*.spec.ts\""

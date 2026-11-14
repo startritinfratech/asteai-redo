@@ -1,42 +1,26 @@
 /**
- * The single place auth tokens live in the browser. Everything else (the API client,
- * the auth store, file downloads) reads and writes them through here.
+ * The browser no longer holds auth tokens: the API keeps them in HttpOnly cookies that
+ * JavaScript cannot read. What the web app can see is `asteai_session`, a non-secret hint
+ * cookie the API sets alongside them (and clears on logout). It answers one question
+ * without a request: "might there be a session?" Public pages use it to avoid calling
+ * `/users/me` (or refreshing) for anonymous visitors.
  */
-const KEYS = { access: 'accessToken', refresh: 'refreshToken', userId: 'userId' } as const;
+export const SESSION_HINT_COOKIE = 'asteai_session';
 
-const hasStorage = () => typeof window !== 'undefined' && typeof window.localStorage !== 'undefined';
+/** Token keys older builds kept in localStorage; removed on first load. */
+const LEGACY_KEYS = ['accessToken', 'refreshToken', 'userId'];
 
-function read(key: string): string | null {
-  if (!hasStorage()) return null;
+export function hasSessionHint(): boolean {
+  if (typeof document === 'undefined') return false;
+  return document.cookie.split(';').some((c) => c.trim().startsWith(`${SESSION_HINT_COOKIE}=`));
+}
+
+/** Drops tokens a previous build left in localStorage (they are useless and readable by any script). */
+export function clearLegacyTokens(): void {
+  if (typeof window === 'undefined') return;
   try {
-    return localStorage.getItem(key);
+    LEGACY_KEYS.forEach((k) => window.localStorage.removeItem(k));
   } catch {
-    return null;
+    // Storage blocked: nothing to clear.
   }
 }
-
-export interface StoredTokens {
-  accessToken: string | null;
-  refreshToken: string | null;
-  userId: string | null;
-}
-
-export const tokenStorage = {
-  get(): StoredTokens {
-    return { accessToken: read(KEYS.access), refreshToken: read(KEYS.refresh), userId: read(KEYS.userId) };
-  },
-
-  getAccessToken: () => read(KEYS.access),
-
-  set(tokens: { accessToken: string; refreshToken: string; userId?: string }) {
-    if (!hasStorage()) return;
-    localStorage.setItem(KEYS.access, tokens.accessToken);
-    localStorage.setItem(KEYS.refresh, tokens.refreshToken);
-    if (tokens.userId) localStorage.setItem(KEYS.userId, tokens.userId);
-  },
-
-  clear() {
-    if (!hasStorage()) return;
-    Object.values(KEYS).forEach((k) => localStorage.removeItem(k));
-  },
-};

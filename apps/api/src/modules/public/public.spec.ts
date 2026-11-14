@@ -33,7 +33,7 @@ describe('job board helpers', () => {
   });
 
   it('the visibility rule hides private, closed, unpublished, expired and test-tenant rows', () => {
-    for (const fragment of ['r.is_public', "r.status = 'Open'", 'NOT t.is_test', 'r.published_at IS NOT NULL', 'r.expires_at > NOW()']) {
+    for (const fragment of ['r.is_public', "r.status = 'Open'", "r.approval_status = 'approved'", 'NOT t.is_test', 'r.published_at IS NOT NULL', 'r.expires_at > NOW()']) {
       assert.ok(PUBLIC_JOB_WHERE.includes(fragment), fragment);
     }
   });

@@ -11,6 +11,7 @@ import { useAuthHydrated, useAuthStore } from '@/store/auth';
 import { EMAIL_RE, PasswordInput, Spinner, authErrorMessage } from '../_components/shared';
 import styles from '../auth.module.css';
 import { EmailCodeStep } from './EmailCodeStep';
+import { OAuthButtons } from '../_components/OAuthButtons';
 
 /** The roles the API lets people self-register as (RegisterDto). Admin is never offered. */
 const ROLES = [
@@ -129,6 +130,15 @@ export function RegisterForm() {
         <p className={styles.notice}>
           You&apos;re already signed in as {user.email}. <Link href={ROLE_HOME[user.role]}>Go to dashboard</Link>
         </p>
+      )}
+
+      {!ticket && (
+        <OAuthButtons
+          next={next}
+          role={role || null}
+          divider="or sign up with email"
+          note={<>By continuing with Google or GitHub you agree to the <Link href="/legal/terms">Terms</Link> and <Link href="/legal/privacy">Privacy Policy</Link>.</>}
+        />
       )}
 
       {!ticket ? (

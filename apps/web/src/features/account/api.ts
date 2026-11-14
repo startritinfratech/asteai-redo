@@ -5,10 +5,9 @@
  */
 import type { User } from '@asteai/types';
 import { api, apiRequest } from '@/lib/api';
-import { tokenStorage } from '@/lib/tokens';
 import { useAuthStore } from '@/store/auth';
 import type {
-  AuthTokensResponse, SessionInfo, TwoFactorChallengeResponse, TwoFactorEnableResponse, TwoFactorSetupResponse,
+  SessionInfo, SessionResponse, TwoFactorChallengeResponse, TwoFactorEnableResponse, TwoFactorSetupResponse,
   TwoFactorStatus,
 } from './types';
 
@@ -16,15 +15,15 @@ import type {
 export const isTwoFactorChallenge = (res: object): res is TwoFactorChallengeResponse =>
   'twoFactorRequired' in res && res.twoFactorRequired === true;
 
-/** The refresh-token row id of this browser's session (the part before the dot). */
+/** The refresh-token row id of this browser's session (returned by every sign-in). */
 export function currentSessionId(): string | null {
-  return tokenStorage.get().refreshToken?.split('.', 1)[0] ?? null;
+  return useAuthStore.getState().sessionId;
 }
 
 // ── Sign-in ───────────────────────────────────────────────────────────────────
 
 export const loginSecondFactor = (challenge: string, factor: { code: string } | { backupCode: string }) =>
-  api.post<AuthTokensResponse>('/auth/login/2fa', { challenge, ...factor });
+  api.post<SessionResponse>('/auth/login/2fa', { challenge, ...factor });
 
 // ── Password ──────────────────────────────────────────────────────────────────
 
@@ -35,7 +34,7 @@ export const resetPassword = (token: string, password: string) =>
   api.post<void>('/auth/password/reset', { token, password });
 
 export async function changePassword(currentPassword: string, newPassword: string): Promise<User> {
-  const res = await api.post<AuthTokensResponse>('/auth/password/change', { currentPassword, newPassword });
+  const res = await api.post<SessionResponse>('/auth/password/change', { currentPassword, newPassword });
   return useAuthStore.getState().setSession(res);
 }
 

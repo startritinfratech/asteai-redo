@@ -48,3 +48,15 @@ test('originOf ignores bad input', () => {
   assert.equal(originOf('/api/v1'), null);
   assert.equal(originOf('http://localhost:3001/api'), 'http://localhost:3001');
 });
+
+test('connect-src allows the résumé bucket origin for direct S3 uploads, and nothing broader', () => {
+  const connect = directive(buildCsp({ uploadUrl: 'https://asteai-resumes.s3.ap-south-1.amazonaws.com/some/path' }), 'connect-src');
+  assert.ok(connect.includes('https://asteai-resumes.s3.ap-south-1.amazonaws.com'));
+  assert.ok(!connect.some((c) => c.includes('*')));
+  assert.ok(!directive(buildCsp({}), 'connect-src').some((c) => c.includes('amazonaws')));
+});
+
+test('the microphone stays limited to our own origin (voice interviews)', () => {
+  const pp = buildSecurityHeaders({}).find((h) => h.key === 'Permissions-Policy')?.value ?? '';
+  assert.match(pp, /microphone=\(self\)/);
+});

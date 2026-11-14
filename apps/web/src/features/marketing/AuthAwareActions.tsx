@@ -49,3 +49,17 @@ export function PrimaryCta({ label, href = REGISTER_PATH }: { label: string; hre
     </Link>
   );
 }
+
+/** Where /pricing sends someone choosing Pro: the wallet's upgrade panel (via sign-up when signed out). */
+export const PRO_UPGRADE_PATH = '/platform/wallet?upgrade=pro';
+
+/** "Upgrade to Pro": straight to the wallet's checkout when signed in, else sign up first. */
+export function ProPlanCta() {
+  const signedIn = useDashboardHref() !== null;
+  const href = signedIn ? PRO_UPGRADE_PATH : `${REGISTER_PATH}?next=${encodeURIComponent(PRO_UPGRADE_PATH)}`;
+  return (
+    <Link href={href} className={clsx(styles.btn, styles.btnPrimary)}>
+      {signedIn ? 'Upgrade to Pro' : 'Start with Pro'}
+    </Link>
+  );
+}

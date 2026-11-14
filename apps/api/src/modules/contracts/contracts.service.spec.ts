@@ -361,6 +361,7 @@ describe('milestone transitions', () => {
     request_revision: (svc, u) => svc.requestRevision('CT-1', MID, 'fix it', u),
     accept: (svc, u) => svc.acceptMilestone('CT-1', MID, u),
     release: (svc, u) => svc.releaseMilestone('CT-1', MID, u),
+    approve_release: (svc, u) => svc.approveAndRelease('CT-1', MID, u),
   };
   const roles = { buyer, expert, admin, outsider } as const;
 
@@ -376,7 +377,7 @@ describe('milestone transitions', () => {
           const replies: Reply[] = [{ rows: [contractRow(funded)] }, { rows: [milestoneRow({ status: from })] }];
           if (expected === 200) {
             replies.push({ rows: [{ id: MID }] });
-            if (action === 'release') replies.push({ rows: [{ id: 'CT-1' }] }, { rows: [] }, { rows: [{ open: '1' }] });
+            if (action === 'release' || action === 'approve_release') replies.push({ rows: [{ id: 'CT-1' }] }, { rows: [] }, { rows: [{ open: '1' }] });
             replies.push(...reload());
           }
           const { svc, sql, params } = setup(replies);
@@ -454,6 +455,37 @@ describe('ContractsService.releaseMilestone', () => {
     await assert.rejects(svc.releaseMilestone('CT-1', MID, buyer), status(409));
     assert.ok(!sql.some((q) => /ledger_entries/.test(q)));
     assert.equal(sql.at(-1), 'ROLLBACK');
+  });
+});
+
+describe('ContractsService.approveAndRelease (submit_deliverable → approve_release)', () => {
+  it('moves a submitted milestone straight to released, stamping both times, and credits the expert in one transaction', async () => {
+    const { svc, sql, params, sent } = setup([
+      { rows: [contractRow({ escrow_funded: '1000.00', released: '600.00' })] },
+      { rows: [milestoneRow({ status: 'submitted' })] },
+      { rows: [{ id: MID }] }, { rows: [{ id: 'CT-1' }] }, { rows: [] }, { rows: [{ open: '0' }] }, { rows: [] },
+      ...reload({ status: 'completed' }),
+    ]);
+    await svc.approveAndRelease('CT-1', MID, buyer);
+    const ms = sql.findIndex((q) => /UPDATE contract_milestones SET status = 'released'/.test(q));
+    assert.match(sql[ms], /accepted_at = NOW\(\), released_at = NOW\(\)/);
+    assert.deepEqual(params[ms].slice(0, 2), [MID, 'submitted']);
+    const ledger = sql.findIndex((q) => /INSERT INTO ledger_entries/.test(q));
+    assert.ok(ledger > sql.indexOf('BEGIN') && ledger < sql.indexOf('COMMIT'));
+    assert.deepEqual(params[ledger].slice(2, 4), ['exp-1', 'Escrow release']);
+    assert.ok(sent.some((s) => s.userId === 'exp-1' && /released/.test(s.text)));
+  });
+
+  it('cannot skip the deliverable: a funded (not yet submitted) milestone is 409, the expert is 403', async () => {
+    const a = setup([{ rows: [contractRow({ escrow_funded: '400.00' })] }, { rows: [milestoneRow({ status: 'funded' })] }]);
+    await assert.rejects(a.svc.approveAndRelease('CT-1', MID, buyer), status(409));
+    const b = setup([{ rows: [contractRow({ escrow_funded: '400.00' })] }, { rows: [milestoneRow({ status: 'submitted' })] }]);
+    await assert.rejects(b.svc.approveAndRelease('CT-1', MID, expert), status(403));
+  });
+
+  it('a disputed contract is frozen: no approve/release until the dispute is settled', async () => {
+    const { svc } = setup([{ rows: [contractRow({ status: 'disputed', escrow_funded: '400.00' })] }]);
+    await assert.rejects(svc.approveAndRelease('CT-1', MID, buyer), status(409));
   });
 });
 

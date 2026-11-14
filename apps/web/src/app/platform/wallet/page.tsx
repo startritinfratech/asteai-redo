@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { useEffect, useState } from 'react';
 import useSWR, { useSWRConfig } from 'swr';
 import type { LedgerEntry } from '@asteai/types';
 import { useAuthStore } from '@/store/auth';
@@ -11,11 +12,15 @@ import {
   type PayoutAccount, type PayoutOverview, type WalletBalances,
 } from '@/features/billing';
 import styles from '@/features/billing/Billing.module.css';
+import { CreditsWallet } from '@/features/credits';
 
 /**
- * Wallet. Experts: earnings, escrow held for them, payout account and payout requests.
- * Buyers: money paid into escrow, released, refunded and still held. Every role: the
- * ledger rows that touch them.
+ * Wallet. Every role: AI credits (balance, top-up packs, Pro, FIFO history). Then money:
+ * experts see earnings, escrow held for them, payout account and payout requests; buyers
+ * see money paid into escrow, released, refunded and still held; everyone sees the ledger
+ * rows that touch them. Credits and money are separate: credits can't be withdrawn.
+ *
+ * `?upgrade=pro` (from /pricing) brings the Pro upgrade into view.
  */
 export default function WalletPage() {
   const role = useAuthStore((s) => s.user?.role);
@@ -25,6 +30,11 @@ export default function WalletPage() {
   const { data: account, mutate: mutateAccount } = useSWR<PayoutAccount | null>(isExpert ? PAYOUT_ACCOUNT_KEY : null, fetcher);
   const { data: overview } = useSWR<PayoutOverview>(isExpert ? PAYOUTS_KEY : null, fetcher);
   const { mutate } = useSWRConfig();
+  // Read here rather than with useSearchParams, so the page needs no Suspense boundary.
+  const [focusUpgrade, setFocusUpgrade] = useState(false);
+  useEffect(() => {
+    setFocusUpgrade(new URLSearchParams(window.location.search).get('upgrade') === 'pro');
+  }, []);
 
   const refresh = () => {
     void mutate(WALLET_KEY);
@@ -38,10 +48,16 @@ export default function WalletPage() {
         eyebrow="Finance & Payouts"
         title="Wallet"
         sub={isExpert
-          ? 'What you have earned, what buyers hold in escrow for you, and your payouts.'
-          : 'What you have paid into escrow, what has been released to experts, and refunds.'}
+          ? 'Your AI credits, what you have earned, what buyers hold in escrow for you, and your payouts.'
+          : 'Your AI credits, what you have paid into escrow, what has been released to experts, and refunds.'}
         actions={<Link href="/platform/invoices">Invoices</Link>}
       />
+
+      <CreditsWallet focusUpgrade={focusUpgrade} />
+
+      <h2 className={styles.sectionTitle}>
+        {isExpert ? 'Earnings & payouts' : 'Payments & escrow'}
+      </h2>
 
       {error && <Empty message="Could not load your wallet." />}
 

@@ -6,6 +6,7 @@ import { Pool } from 'pg';
 import type { User, UserRole } from '@asteai/types';
 import { DB_POOL } from '../../../database/database.module';
 import { mapUserRow, USER_COLUMNS, UserRow } from '../../users/user.mapper';
+import { accessTokenFromCookie, allowedOrigins } from '../session-cookies';
 import { ACCOUNT_ACTIVE_SQL, NOT_BLOCKED_SQL, tokenIssueParams, tokenNotRevokedSql } from '../account-status';
 
 export interface JwtPayload {
@@ -20,7 +21,7 @@ export interface JwtPayload {
 }
 
 /**
- * Validates the bearer access token and loads the (still active, not banned or suspended)
+ * Validates the access token (HttpOnly cookie, or bearer header) and loads the (still active, not banned or suspended)
  * user onto `request.user`, so a ban takes effect on the next request.
  */
 @Injectable()
@@ -30,7 +31,11 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
     @Inject(DB_POOL) private readonly db: Pool,
   ) {
     super({
-      jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
+      // Browsers: the HttpOnly access cookie. Other clients (scripts, tests): a bearer header.
+      jwtFromRequest: ExtractJwt.fromExtractors([
+        accessTokenFromCookie(allowedOrigins(config)),
+        ExtractJwt.fromAuthHeaderAsBearerToken(),
+      ]),
       secretOrKey: config.getOrThrow<string>('JWT_SECRET'),
       ignoreExpiration: false,
     });

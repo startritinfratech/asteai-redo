@@ -39,6 +39,14 @@ import { MarketingModule } from './modules/marketing/marketing.module';
 import { PublicModule } from './modules/public/public.module';
 import { ProductsModule } from './modules/products/products.module';
 import { SupportModule } from './modules/support/support.module';
+import { CreditsModule } from './modules/credits/credits.module';
+import { CredentialsModule } from './modules/credentials/credentials.module';
+import { ChallengesModule } from './modules/challenges/challenges.module';
+import { ResumesModule } from './modules/resumes/resumes.module';
+import { JobCreatorModule } from './modules/job-creator/job-creator.module';
+import { TalentPoolsModule } from './modules/talent-pools/talent-pools.module';
+import { OutreachModule } from './modules/outreach/outreach.module';
+import { ExpertSearchModule } from './modules/expert-search/expert-search.module';
 
 @Module({
   imports: [
@@ -84,6 +92,14 @@ import { SupportModule } from './modules/support/support.module';
     PublicModule,
     ProductsModule,
     SupportModule,
+    CreditsModule,
+    CredentialsModule,
+    ChallengesModule,
+    ResumesModule,
+    JobCreatorModule,
+    TalentPoolsModule,
+    OutreachModule,
+    ExpertSearchModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },

@@ -23,6 +23,8 @@ const nextConfig = {
       headers: buildSecurityHeaders({
         apiUrl: process.env.NEXT_PUBLIC_API_URL,
         wsUrl: process.env.NEXT_PUBLIC_WS_URL,
+        // e.g. https://asteai-resumes.s3.ap-south-1.amazonaws.com (résumé uploads go straight to S3)
+        uploadUrl: process.env.NEXT_PUBLIC_RESUME_UPLOAD_ORIGIN,
         dev: process.env.NODE_ENV !== 'production',
       }),
     }];

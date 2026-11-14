@@ -1,6 +1,6 @@
-import { Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { Pool } from 'pg';
-import type { ApplicationStage, User } from '@asteai/types';
+import { allowedNextStages, canMoveApplication, type ApplicationStage, type User } from '@asteai/types';
 import { DB_POOL, withTransaction } from '../../database/database.module';
 import { assertTenantAccess } from '../../common/utils/access';
 import { generateId } from '../../common/utils/ids';
@@ -55,11 +55,12 @@ export class ApplicationsService {
 
   async apply(reqId: string, candidateId: string) {
     // An expired public posting no longer takes applications (the board already hides it).
-    const { rows: reqRows } = await this.db.query<{ tenant_id: string; status: string }>(
-      `SELECT tenant_id, status FROM requisitions WHERE id = $1 AND (expires_at IS NULL OR expires_at > NOW())`,
+    const { rows: reqRows } = await this.db.query<{ tenant_id: string; status: string; approval_status: string }>(
+      `SELECT tenant_id, status, approval_status FROM requisitions WHERE id = $1 AND (expires_at IS NULL OR expires_at > NOW())`,
       [reqId],
     );
-    if (!reqRows.length || reqRows[0].status !== 'Open') {
+    // Only approved jobs take applications: the same gate as the public job board.
+    if (!reqRows.length || reqRows[0].status !== 'Open' || reqRows[0].approval_status !== 'approved') {
       throw new NotFoundException('Requisition not found or not open for applications');
     }
 
@@ -82,7 +83,20 @@ export class ApplicationsService {
     return mapApplicationRow(rows[0]);
   }
 
-  async advanceStage(appId: string, stage: ApplicationStage, byName: string, user: User) {
+  /**
+   * Moves an application one step along the pipeline (APPLICATION_STAGE_MOVES:
+   * Applied → Screened → Interview → Shortlisted → Offer → Joined, Rejected from any
+   * active stage). Admins may move anywhere. The row is locked, so two recruiters can't
+   * both advance it from the same stage.
+   */
+  async advanceStage(
+    appId: string, stage: ApplicationStage, byName: string, user: User,
+    opts: { expectedStage?: ApplicationStage; reason?: string } = {},
+  ) {
+    const isAdmin = user.role === 'Admin';
+    const reason = opts.reason?.trim() || undefined;
+    if (stage === 'Rejected' && !reason && !isAdmin) throw new BadRequestException('Give a reason when rejecting an application');
+
     return withTransaction(this.db, async (client) => {
       const { rows } = await client.query<ApplicationRow>(
         `SELECT * FROM applications WHERE id = $1 FOR UPDATE`,
@@ -91,7 +105,17 @@ export class ApplicationsService {
       if (!rows.length) throw new NotFoundException('Application not found');
       assertTenantAccess(user, rows[0].tenant_id);
 
-      const history = [...(rows[0].history ?? []), { t: Date.now(), stage, by: byName }];
+      const from = rows[0].stage as ApplicationStage;
+      if (opts.expectedStage && opts.expectedStage !== from) {
+        throw new ConflictException(`This application is now at '${from}'; reload and try again`);
+      }
+      if (from === stage) return mapApplicationRow(rows[0]);
+      if (!canMoveApplication(from, stage, isAdmin)) {
+        const next = allowedNextStages(from).join(', ') || 'none (final stage)';
+        throw new ConflictException(`Cannot move an application from '${from}' to '${stage}'. Next: ${next}`);
+      }
+
+      const history = [...(rows[0].history ?? []), { t: Date.now(), stage, by: byName, ...(reason ? { reason } : {}) }];
       const { rows: updated } = await client.query<ApplicationRow>(
         `UPDATE applications SET stage = $1, history = $2::jsonb, updated_at = NOW()
           WHERE id = $3 RETURNING *`,

@@ -84,6 +84,12 @@ export interface Requisition {
   brief: string | null;
   /** Public job-board settings (PATCH /requisitions/:id/posting). */
   posting?: RequisitionPosting;
+  /** Admin review before public listing (see ./ats). */
+  approval?: import('./ats').ReqApproval;
+  /** Asked of applicants; e.g. from the AI Job Creator. */
+  screeningQuestions?: import('./ats').ScreeningQuestion[];
+  /** How interviewers score candidates for this role. */
+  evaluationRubric?: import('./ats').JobRubricCriterion[];
   createdAt: string;
   updatedAt: string;
 }
@@ -103,7 +109,7 @@ export interface RequisitionPosting {
 }
 
 export const APPLICATION_STAGES = [
-  'Applied', 'Eligibility', 'Assessment Pending', 'Assessment Review',
+  'Applied', 'Screened', 'Eligibility', 'Assessment Pending', 'Assessment Review',
   'Shortlisted', 'Interview', 'Offer', 'Joined', 'Rejected',
 ] as const;
 export type ApplicationStage = typeof APPLICATION_STAGES[number];
@@ -261,6 +267,8 @@ export interface Proposal {
   projectStage?: ProjectStage;
   /** The contract for this proposal, once the buyer created one; undefined when not selected. */
   contractId?: string | null;
+  /** Statement of work, when the expert attached one (see ./sourcing). */
+  sow?: import('./sourcing').StatementOfWork | null;
 }
 
 export interface Project {
@@ -480,3 +488,7 @@ export * from './billing';
 export * from './dispute';
 export * from './gig';
 export * from './public';
+export * from './credits';
+export * from './career';
+export * from './ats';
+export * from './sourcing';

@@ -16,15 +16,25 @@ export function partyOf(contract: { buyer_id: string; expert_id: string }, user:
 }
 
 /**
- * Milestone moves after funding. Funding itself (pending → funded) is not a user move:
- * the buyer only opens a payment request, and the milestone becomes 'funded' when that
- * payment is captured (see ContractsService.markPaymentCaptured).
+ * Milestone escrow, end to end:
+ *
+ *   pending ──fund (payment captured)──▶ funded ──submit──▶ submitted ──approve_release──▶ released
+ *                                                   ▲            │  (or accept, then release)
+ *                                                   └─revision◀──┘ request_revision
+ *   funded / submitted / revision_requested / accepted ──dispute──▶ contract frozen, admin settles
+ *
+ * Funding itself (pending → funded) is not a user move: the buyer only opens a payment
+ * request, and the milestone becomes 'funded' when that payment is captured (see
+ * ContractsService.markPaymentCaptured). Disputes are opened through DisputesService,
+ * which freezes the contract; the admin's resolution releases or refunds the escrow.
  */
 export const MILESTONE_ACTIONS = {
   submit: { by: 'expert', from: ['funded', 'revision_requested'], to: 'submitted' },
   request_revision: { by: 'buyer', from: ['submitted'], to: 'revision_requested' },
   accept: { by: 'buyer', from: ['submitted'], to: 'accepted' },
   release: { by: 'buyer', from: ['accepted'], to: 'released' },
+  /** Accept and release in one step (one transaction): the usual way a buyer pays out. */
+  approve_release: { by: 'buyer', from: ['submitted'], to: 'released' },
 } as const satisfies Record<string, {
   by: 'buyer' | 'expert'; from: readonly ContractMilestoneStatus[]; to: ContractMilestoneStatus;
 }>;
@@ -34,6 +44,9 @@ export type MilestoneAction = keyof typeof MILESTONE_ACTIONS;
 export function isActor(party: ContractParty, action: MilestoneAction): boolean {
   return MILESTONE_ACTIONS[action].by === 'buyer' ? party.isBuyer : party.isExpert;
 }
+
+/** Milestone statuses that hold escrow and can therefore be disputed. */
+export const DISPUTABLE: readonly ContractMilestoneStatus[] = ['funded', 'submitted', 'revision_requested', 'accepted'];
 
 /** Whether `action` applies to a milestone currently in `status`. */
 export function canApply(action: MilestoneAction, status: ContractMilestoneStatus): boolean {

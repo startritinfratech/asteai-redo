@@ -1,9 +1,9 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { clsx } from 'clsx';
-import type { Plan, PlanAudience, PublicCreditSettings } from '@asteai/types';
+import type { CreditCost, Plan, PlanAudience, PublicCreditSettings } from '@asteai/types';
 import { PageHero, PageShell } from '@/features/marketing/PageShell';
-import { PrimaryCta, REGISTER_PATH } from '@/features/marketing/AuthAwareActions';
+import { PrimaryCta, ProPlanCta, REGISTER_PATH } from '@/features/marketing/AuthAwareActions';
 import { Bullets } from '@/features/marketing/sections';
 import marketing from '@/features/marketing/marketing.module.css';
 import page from '@/features/marketing/pages.module.css';
@@ -36,10 +36,30 @@ const FALLBACK_PLANS: Plan[] = [
     features: ['Everything in Pro', 'AI Project Creation', 'Proposal Analytics', 'Featured Placement', 'AI Dispute Management', 'Dedicated Support'] },
 ];
 
+/** Mirrors the 016 credit_costs seed; used only if the API is unreachable. */
+const FALLBACK_COSTS: CreditCost[] = [
+  { feature: 'expert_autofill', label: 'Expert profile autofill', cost: 15, costMax: null },
+  { feature: 'ai_expert_chat', label: 'Chat with AI to find experts', cost: 15, costMax: null },
+  { feature: 'ai_search', label: 'AI search', cost: 15, costMax: null },
+  { feature: 'voice_search', label: 'Voice search', cost: 3, costMax: null },
+  { feature: 'ai_create_gig', label: 'Create a gig with AI', cost: 15, costMax: null },
+  { feature: 'ai_create_project', label: 'Create a project with AI', cost: 15, costMax: null },
+  { feature: 'semantic_gig_search', label: 'Semantic search of gigs', cost: 6, costMax: null },
+  { feature: 'project_recs', label: 'Project recommendations', cost: 6, costMax: null },
+  { feature: 'proposal', label: 'Sending a proposal', cost: 3, costMax: 12 },
+  { feature: 'quick_connect', label: 'Quick expert connect', cost: 1, costMax: null },
+  { feature: 'dispute', label: 'Opening a dispute', cost: 3, costMax: null },
+];
+
+/** The base rate shown on this page (Pro: 100 credits for 499 rupees, about 5 a credit). */
+const RUPEES_PER_CREDIT = 5;
+
 const FAQS = [
   { q: 'Can I switch plans anytime?', a: 'Yes. You can upgrade or downgrade at any time; changes take effect immediately.' },
   { q: 'Is there a free trial?', a: 'The Free plan is always available with core features.' },
-  { q: 'What payment methods do you accept?', a: 'Major credit and debit cards, and UPI.' },
+  { q: 'What payment methods do you accept?', a: 'Major credit and debit cards, UPI and netbanking, through Razorpay.' },
+  { q: 'Do unused credits roll over?', a: 'Monthly plan credits expire at the end of each billing month. Credits you buy as a top-up never expire. The oldest credits are always spent first.' },
+  { q: 'Can I buy credits without a plan?', a: 'Yes. Top up any time from your wallet; bigger packs save up to 30%.' },
 ] as const;
 
 function price(p: Plan): { amount: string; per: string } {
@@ -48,8 +68,10 @@ function price(p: Plan): { amount: string; per: string } {
   return { amount, per: p.priceMinor === 0 ? '' : `/${p.interval}` };
 }
 
-const costLabel = (c: PublicCreditSettings['costs'][number]) =>
+const costLabel = (c: CreditCost) =>
   `${c.costMax ? `${c.cost}–${c.costMax}` : c.cost} credit${(c.costMax ?? c.cost) === 1 ? '' : 's'}`;
+const costRupees = (c: CreditCost) =>
+  c.costMax ? `₹${c.cost * RUPEES_PER_CREDIT}–₹${c.costMax * RUPEES_PER_CREDIT}` : `₹${c.cost * RUPEES_PER_CREDIT}`;
 
 export default async function PricingPage({ searchParams }: { searchParams: SearchParams }) {
   const audience = audienceOf(searchParams);
@@ -64,6 +86,7 @@ export default async function PricingPage({ searchParams }: { searchParams: Sear
     if (!(err instanceof ApiUnavailable || err instanceof ApiNotFound)) throw err;
   }
   const shown = plans ?? (audience === 'individual' ? FALLBACK_PLANS : []);
+  const costs = credits?.costs ?? FALLBACK_COSTS;
   const employer = audience === 'employer';
 
   return (
@@ -112,12 +135,18 @@ export default async function PricingPage({ searchParams }: { searchParams: Sear
                     {p.amount}
                     {p.per && <span className={page.pricePer}>{p.per}</span>}
                   </p>
-                  {plan.monthlyCredits > 0 && <p className={s.muted}>{plan.monthlyCredits} credits every month</p>}
+                  {!employer && (
+                    <p className={page.planCredits}>
+                      {plan.monthlyCredits > 0 ? `${plan.monthlyCredits} AI credits every month` : 'Pay-as-you-go AI credits'}
+                    </p>
+                  )}
                   <Bullets items={plan.features} />
                   <div className={page.planCta}>
-                    {contactSales
+                    {contactSales || (!employer && plan.id === 'enterprise')
                       ? <Link href="/contact?intent=demo" className={`${marketing.btn} ${marketing.btnPrimary}`}>Contact sales</Link>
-                      : <PrimaryCta label="Get started" href={employer ? `${REGISTER_PATH}?role=Employer` : REGISTER_PATH} />}
+                      : !employer && plan.id === 'pro'
+                        ? <ProPlanCta />
+                        : <PrimaryCta label="Get started" href={employer ? `${REGISTER_PATH}?role=Employer` : REGISTER_PATH} />}
                   </div>
                 </li>
               );
@@ -133,8 +162,8 @@ export default async function PricingPage({ searchParams }: { searchParams: Sear
               <span className={marketing.eyebrow}>Credits</span>
               <h2 id="credits-title" className={marketing.h2}>Credits overview</h2>
               <p className={marketing.lede}>
-                Credits pay for AI-powered features. <strong>1 credit = ₹5.</strong> Credits are refunded automatically if an AI
-                feature fails, and the oldest credits are spent first.
+                Credits pay for AI-powered features. <strong>1 credit = ₹{RUPEES_PER_CREDIT}</strong>, and bulk top-up packs save up
+                to 30%. Credits are refunded automatically if an AI feature fails, and the oldest credits are spent first.
               </p>
             </div>
             {credits && (
@@ -157,19 +186,30 @@ export default async function PricingPage({ searchParams }: { searchParams: Sear
                 </li>
               </ul>
             )}
-            <h3 className={page.subhead}>Credit cost reference</h3>
-            {credits ? (
-              <ul className={page.costGrid}>
-                {credits.costs.map((c) => (
-                  <li key={c.feature} className={page.cost}>
-                    <span>{c.label}</span>
-                    <span className={page.costValue}>{costLabel(c)}</span>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className={s.muted}>Credit costs can’t be loaded right now.</p>
-            )}
+            <h3 id="cost-reference" className={page.subhead}>Credit cost reference</h3>
+            <div className={page.costTableWrap}>
+              <table className={page.costTable} aria-labelledby="cost-reference">
+                <thead>
+                  <tr>
+                    <th scope="col">Feature</th>
+                    <th scope="col" className={page.num}>Credits</th>
+                    <th scope="col" className={page.num}>At ₹{RUPEES_PER_CREDIT}/credit</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {costs.map((c) => (
+                    <tr key={c.feature}>
+                      <th scope="row">{c.label}</th>
+                      <td className={page.num}>{costLabel(c)}</td>
+                      <td className={page.num}>{costRupees(c)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <caption>
+                  Proposal cost depends on the project budget tier. If an AI feature fails, its credits are refunded automatically.
+                </caption>
+              </table>
+            </div>
           </div>
         </section>
       )}

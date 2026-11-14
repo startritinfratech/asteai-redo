@@ -5,6 +5,7 @@ import {
 import { Type } from 'class-transformer';
 import { ApiProperty } from '@nestjs/swagger';
 import { CandidateTier } from '@asteai/types';
+import { RubricCriterionDto, ScreeningQuestionDto } from './screening.dto';
 
 /** deeptech_ai expects whole-number weights that add up to exactly 100. */
 @ValidatorConstraint({ name: 'weightsSumTo100' })
@@ -49,4 +50,14 @@ export class CreateRequisitionDto {
   stack?: string[];
 
   @ApiProperty({ required: false }) @IsOptional() @IsString() @MaxLength(10_000) brief?: string;
+
+  /** Asked of applicants (e.g. from POST /ai/jobs/generate). */
+  @ApiProperty({ type: [ScreeningQuestionDto], required: false })
+  @IsOptional() @IsArray() @ArrayMaxSize(20) @ValidateNested({ each: true }) @Type(() => ScreeningQuestionDto)
+  screeningQuestions?: ScreeningQuestionDto[];
+
+  /** Interview scoring rubric; weights are whole numbers summing to 100. */
+  @ApiProperty({ type: [RubricCriterionDto], required: false })
+  @IsOptional() @IsArray() @ArrayMaxSize(10) @ValidateNested({ each: true }) @Type(() => RubricCriterionDto)
+  evaluationRubric?: RubricCriterionDto[];
 }
