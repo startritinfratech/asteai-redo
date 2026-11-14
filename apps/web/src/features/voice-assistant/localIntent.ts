@@ -15,6 +15,9 @@ const routeAliases: Readonly<Record<string, string>> = {
   'support': 'route:support',
   'talk to a human': 'route:support',
   'speak to a human': 'route:support',
+  'talk to someone': 'route:support',
+  'speak to someone': 'route:support',
+  'get human support': 'route:support',
 };
 const actionAliases: Readonly<Record<string, string>> = { 'generate job': 'action:job-creator.generate' };
 const smallNumbers = 'zero one two three four five six seven eight nine ten eleven twelve'.split(' ');
@@ -45,6 +48,13 @@ export function matchLocally(utterance: string, targets: VoiceTarget[], followUp
   const text = utterance.trim().replace(/^(?:(?:hey aste\s*ai|please|can you|could you|i want to|i need to)[,\s]+)+/i, '');
   const u = norm(text);
   if (/^(go )?back$/.test(u)) return result({ kind: 'back', speech: 'Going back.' });
+  const support = targets.find((target) => target.id === 'route:support' && target.kind === 'route');
+  if (support && /^(?:i (?:am|m) (?:stuck|frustrated)|this is (?:frustrating|not working)|nothing (?:is working|works))$/.test(u)) {
+    return result({
+      kind: 'clarify',
+      speech: 'I can help. What were you trying to do? You can also say “talk to a human” to open Help & Support.',
+    });
+  }
   if (/^(?:where can i (?:see|find)|show me) (?:my )?candidates$/.test(u) &&
       targets.some((t) => t.id === 'route:pipeline') && targets.some((t) => t.id === 'route:pools')) {
     return result({ kind: 'clarify', speech: 'Do you mean the applications pipeline or the talent pool?' });

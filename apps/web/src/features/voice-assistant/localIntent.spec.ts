@@ -62,6 +62,9 @@ describe('matchLocally', () => {
     assert.equal(matchLocally('I want to post a job', employer)?.targetId, 'route:hire/job-creator');
     assert.equal(matchLocally('I want to post a job', targets), null);
     assert.equal(matchLocally('Can you speak to a human?', employer)?.targetId, 'route:support');
+    assert.equal(matchLocally('I’m frustrated.', employer)?.kind, 'clarify');
+    assert.equal(matchLocally('I’m not frustrated.', employer), null);
+    assert.equal(matchLocally('Can you talk to someone?', employer)?.targetId, 'route:support');
     assert.equal(matchLocally('Generate job', employer)?.needsConfirmation, true);
   });
 
