@@ -85,6 +85,18 @@ describe('AssistantService', () => {
     assert.equal(result.targetId, null);
   });
 
+  it('sends the previous clarification with the current answer', async () => {
+    const { svc, calls } = serviceReplying({ kind: 'navigate', targetId: 'route:requisitions', value: '', speech: 'Opening Requisitions.' });
+    const result = await svc.resolve(user, {
+      ...cmd, utterance: 'Requisitions.',
+      clarification: { utterance: 'Show me hiring.', question: 'Requisitions or the application pipeline?' },
+    });
+    assert.equal(result.targetId, 'route:requisitions');
+    const content = (calls[0].messages as { content: string }[])[0].content;
+    assert.match(content, /<prior_clarification>.*Show me hiring.*Requisitions or the application pipeline/);
+    assert.match(content, /<utterance>Requisitions\.<\/utterance>/);
+  });
+
   it('rejects a target of the wrong kind for the action', async () => {
     const { svc } = serviceReplying({ kind: 'navigate', targetId: 'action:requisitions.create', value: '', speech: '' });
     assert.equal((await svc.resolve(user, cmd)).kind, 'clarify');

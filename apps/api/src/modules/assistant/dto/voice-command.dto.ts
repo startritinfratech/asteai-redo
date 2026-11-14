@@ -17,7 +17,16 @@ export class VoiceTargetDto {
   @ApiPropertyOptional() @IsOptional() @IsBoolean() confirm?: boolean;
 }
 
+class VoiceClarificationDto {
+  @IsString() @Length(1, 500) utterance: string;
+  @IsString() @Length(1, 500) question: string;
+}
+
 export class VoiceCommandDto {
+  @ApiPropertyOptional({ type: VoiceClarificationDto })
+  @IsOptional() @ValidateNested() @Type(() => VoiceClarificationDto)
+  clarification?: VoiceClarificationDto;
+
   @ApiProperty({ example: 'open my requisitions' })
   @IsString() @Length(1, 500) utterance: string;
 

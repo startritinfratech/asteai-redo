@@ -23,7 +23,7 @@ const VOICE_OFF_PATHS = ['/platform/assess', '/platform/studio'];
 export function VoiceAssistant({ role }: { role: UserRole }) {
   const pathname = usePathname();
   if (VOICE_OFF_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`))) return null;
-  return <VoiceDock role={role} pathname={pathname} />;
+  return <VoiceDock key={`${role}:${pathname}`} role={role} pathname={pathname} />;
 }
 
 /**
@@ -41,8 +41,10 @@ function VoiceDock({ role, pathname }: { role: UserRole; pathname: string }) {
   const [typed, setTyped] = useState('');
   const [pending, setPending] = useState<{ cmd: VoiceCommandResult; targets: RegisteredTarget[] } | null>(null);
   const [speechOk, setSpeechOk] = useState(false);
+  const [useText, setUseText] = useState(false);
   const listening = useRef<Listening | null>(null);
   const mounted = useRef(true);
+  const clarification = useRef<VoiceCommandRequest['clarification']>();
   const lang = typeof navigator !== 'undefined' ? navigator.language : 'en';
 
   useEffect(() => setSpeechOk(isSpeechSupported()), []);
@@ -64,10 +66,20 @@ function VoiceDock({ role, pathname }: { role: UserRole; pathname: string }) {
   }, [lang]);
 
   const run = useCallback(async (cmd: VoiceCommandResult, targets: RegisteredTarget[]) => {
-    const ok = await execute(cmd, targets, router);
-    say(ok ? cmd.speech : "That isn't available on this page any more.");
-    setPhase('idle');
-  }, [router, say]);
+    try {
+      const currentTargets = [...routeTargets(role), ...pageTargets()];
+      // Only use the same registration that was offered when the command was resolved.
+      const active = currentTargets.filter((target) => targets.some((offered) =>
+        target.kind === 'route' ? offered.id === target.id : offered === target,
+      ));
+      const ok = await execute(cmd, active, router);
+      if (mounted.current) say(ok ? cmd.speech : "That isn't available on this page any more.");
+    } catch (err) {
+      if (mounted.current) say(errorMessage(err, 'Could not complete that action.'));
+    } finally {
+      if (mounted.current) setPhase('idle');
+    }
+  }, [role, router, say]);
 
   const handle = useCallback(async (utterance: string) => {
     setHeard(utterance);
@@ -82,16 +94,22 @@ function VoiceDock({ role, pathname }: { role: UserRole; pathname: string }) {
           utterance,
           pathname,
           language: lang,
+          clarification: clarification.current,
           targets: targets.map(({ id, kind, label, description, confirm }) => ({ id, kind, label, description, confirm })),
         };
         cmd = await api.post<VoiceCommandResult>('/assistant/command', body);
       } catch (err) {
+        if (!mounted.current) return;
         say(errorMessage(err, 'The assistant is unavailable.'));
         setPhase('idle');
         return;
       }
     }
 
+    if (!mounted.current) return;
+    clarification.current = cmd.kind === 'clarify' && cmd.speech
+      ? { utterance: clarification.current?.utterance ?? utterance.slice(0, 500), question: cmd.speech.slice(0, 500) }
+      : undefined;
     if (needsConfirmation(cmd, targets)) {
       setPending({ cmd, targets });
       setPhase('confirm');
@@ -106,20 +124,22 @@ function VoiceDock({ role, pathname }: { role: UserRole; pathname: string }) {
     setReply('');
     setPending(null);
     setPhase('listening');
-    const current = listenOnce(lang);
-    listening.current = current;
     try {
+      const current = listenOnce(lang);
+      listening.current = current;
       const utterance = await current.result;
       if (!mounted.current) return;
+      if (window.location.pathname !== pathname) return;
       await handle(utterance);
     } catch (err) {
       if (!mounted.current) return;
+      setUseText(true);
       say(errorMessage(err));
       setPhase('idle');
     } finally {
-      if (listening.current === current) listening.current = null;
+      listening.current = null;
     }
-  }, [lang, handle, say]);
+  }, [lang, handle, pathname, say]);
 
   const toggle = useCallback(() => {
     if (phase === 'listening') listening.current?.cancel();
@@ -138,6 +158,7 @@ function VoiceDock({ role, pathname }: { role: UserRole; pathname: string }) {
   const confirm = async () => {
     if (!pending) return;
     setPending(null);
+    setPhase('thinking');
     await run(pending.cmd, pending.targets);
   };
   const cancel = () => {
@@ -160,7 +181,7 @@ function VoiceDock({ role, pathname }: { role: UserRole; pathname: string }) {
         )}
       </div>
 
-      {speechOk ? (
+      {speechOk && !useText ? (
         <button
           type="button"
           className={styles.mic}
@@ -188,6 +209,11 @@ function VoiceDock({ role, pathname }: { role: UserRole; pathname: string }) {
             disabled={phase !== 'idle'}
           />
         </form>
+      )}
+      {speechOk && (
+        <button type="button" className={styles.cancel} disabled={phase !== 'idle'} onClick={() => setUseText(!useText)}>
+          {useText ? 'Use microphone' : 'Type instead'}
+        </button>
       )}
     </div>
   );

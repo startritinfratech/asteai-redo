@@ -15,11 +15,20 @@ const result = (r: Partial<VoiceCommandResult> & Pick<VoiceCommandResult, 'kind'
  * Returns null when it isn't sure, and the command goes to the server.
  */
 export function matchLocally(utterance: string, targets: VoiceTarget[]): VoiceCommandResult | null {
-  const u = norm(utterance);
+  const text = utterance.trim().replace(/^(?:(?:hey aste\s*ai|please|can you|could you)[,\s]+)+/i, '');
+  const u = norm(text);
   if (/^(go )?back$/.test(u)) return result({ kind: 'back', speech: 'Going back.' });
 
   const scroll = /^scroll (up|down)$/.exec(u);
   if (scroll) return result({ kind: 'scroll', value: scroll[1], speech: '' });
+
+  const fill = /^(?:set|change|fill)\s+(.+?)\s+(?:to|with)\s+([\s\S]+)$/i.exec(text);
+  if (fill) {
+    const hits = targets.filter((t) => t.kind === 'field' && bare(t.label) === bare(fill[1]));
+    if (hits.length !== 1) return null;
+    const [t] = hits;
+    return result({ kind: 'fill', targetId: t.id, value: fill[2], speech: `Updated ${t.label}.`, needsConfirmation: t.confirm === true });
+  }
 
   const verb = /^(?:go to|open|show(?: me)?|take me to|navigate to|press|click|tap)\s+(.+?)(?: page)?$/.exec(u);
   if (!verb) return null;

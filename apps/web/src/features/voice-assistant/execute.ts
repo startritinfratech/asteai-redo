@@ -35,8 +35,7 @@ export async function execute(
     case 'fill': {
       const t = targets.find((x) => x.id === cmd.targetId && x.kind === (cmd.kind === 'fill' ? 'field' : 'action'));
       if (!t?.run) return false;
-      await t.run(cmd.value ?? undefined);
-      return true;
+      return (await t.run(cmd.value ?? undefined)) !== false;
     }
     default:
       return true; // answer / clarify: speech only

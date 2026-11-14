@@ -31,6 +31,13 @@ describe('matchLocally', () => {
     assert.equal(matchLocally('open search', targets), null);
   });
 
+  it('handles polite navigation and gives exact field commands a local path', () => {
+    assert.equal(matchLocally('Hey AsteAI, could you please take me to my applications?', targets)?.targetId, 'route:applications');
+    const filled = matchLocally('Please fill search with C++ / Node.js', targets);
+    assert.deepEqual([filled?.kind, filled?.targetId, filled?.value], ['fill', 'field:search', 'C++ / Node.js']);
+    assert.equal(matchLocally('set missing to C++', targets), null);
+  });
+
   it('leaves unknown pages and questions to the server', () => {
     assert.equal(matchLocally('open settings', targets), null);
     assert.equal(matchLocally('what is a passport?', targets), null);
