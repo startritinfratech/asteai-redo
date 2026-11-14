@@ -31,7 +31,7 @@ function recognitionCtor(): RecognitionCtor | null {
 }
 
 export function isSpeechSupported(): boolean {
-  return recognitionCtor() !== null;
+  return typeof window !== 'undefined' && window.isSecureContext && recognitionCtor() !== null;
 }
 
 export class SpeechError extends Error {
@@ -55,14 +55,16 @@ export function listenOnce(lang: string): Listening {
   rec.interimResults = false;
   rec.maxAlternatives = 1;
 
+  let finish: (text: string) => void = () => {};
   const result = new Promise<string>((resolve, reject) => {
+    finish = resolve;
     let transcript = '';
     rec.onresult = (e) => { transcript = e.results[0]?.[0]?.transcript ?? ''; };
     rec.onerror = (e) => { if (e.error !== 'aborted') reject(new SpeechError(e.error)); };
-    rec.onend = () => resolve(transcript.trim());
+    rec.onend = () => transcript.trim() ? resolve(transcript.trim()) : reject(new SpeechError('no-speech'));
+    rec.start();
   });
-  rec.start();
-  return { result, cancel: () => rec.abort() };
+  return { result, cancel: () => { finish(''); rec.abort(); } };
 }
 
 export function speak(text: string, lang: string) {

@@ -57,7 +57,7 @@ export class AnalyticsService {
            FROM requisitions r WHERE ${scope('r')}`, params,
       ),
       this.db.query<{ active: number }>(
-        `SELECT COUNT(*)::int AS active FROM outreach_campaigns c WHERE c.status = 'queued' AND ${scope('c')}`, params,
+        `SELECT COUNT(*)::int AS active FROM ats_outreach_campaigns c WHERE c.status = 'queued' AND ${scope('c')}`, params,
       ),
       this.db.query<{ median_days: string | null; hires: number }>(
         `WITH joined AS (

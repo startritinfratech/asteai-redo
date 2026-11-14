@@ -12,6 +12,9 @@ export function routeTargets(role: UserRole): VoiceTarget[] {
       out.push({ id: `route:${item.slug}`, kind: 'route', label: item.label, description: group });
     }
   }
+  if (role === 'Employer' || role === 'Admin') {
+    out.push({ id: 'route:hire/job-creator', kind: 'route', label: 'AI Job Creator', description: 'Draft a job and screening questions' });
+  }
   return out;
 }
 

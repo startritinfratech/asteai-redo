@@ -3,9 +3,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import type { UserRole, VoiceCommandRequest, VoiceCommandResult } from '@asteai/types';
-import { api, errorMessage } from '@/lib/api';
+import { apiFetch, errorMessage } from '@/lib/api';
 import { execute, needsConfirmation } from './execute';
-import { matchLocally } from './localIntent';
+import { confirmationReply, matchLocally } from './localIntent';
 import { pageTargets, type RegisteredTarget } from './registry';
 import { routeTargets } from './routeTargets';
 import { isSpeechSupported, listenOnce, speak, stopSpeaking, type Listening } from './speech';
@@ -18,12 +18,14 @@ type Phase = 'idle' | 'listening' | 'thinking' | 'confirm';
  * asked to solve a question or pick an answer; in the interview Studio it would compete
  * with the live AI interview for the microphone.
  */
-const VOICE_OFF_PATHS = ['/platform/assess', '/platform/studio'];
+const VOICE_OFF_PATHS = ['/platform/assess', '/platform/studio', '/platform/career/interview', '/platform/career/challenges'];
+const requestTimeoutMs = 10_000;
+const listeningTimeoutMs = 15_000;
 
 export function VoiceAssistant({ role }: { role: UserRole }) {
   const pathname = usePathname();
   if (VOICE_OFF_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`))) return null;
-  return <VoiceDock role={role} pathname={pathname} />;
+  return <VoiceDock key={`${role}:${pathname}`} role={role} pathname={pathname} />;
 }
 
 /**
@@ -41,8 +43,11 @@ function VoiceDock({ role, pathname }: { role: UserRole; pathname: string }) {
   const [typed, setTyped] = useState('');
   const [pending, setPending] = useState<{ cmd: VoiceCommandResult; targets: RegisteredTarget[] } | null>(null);
   const [speechOk, setSpeechOk] = useState(false);
+  const [useText, setUseText] = useState(false);
   const listening = useRef<Listening | null>(null);
+  const request = useRef<AbortController | null>(null);
   const mounted = useRef(true);
+  const clarification = useRef<VoiceCommandRequest['clarification']>();
   const lang = typeof navigator !== 'undefined' ? navigator.language : 'en';
 
   useEffect(() => setSpeechOk(isSpeechSupported()), []);
@@ -54,6 +59,7 @@ function VoiceDock({ role, pathname }: { role: UserRole; pathname: string }) {
       mounted.current = false;
       listening.current?.cancel();
       listening.current = null;
+      request.current?.abort();
       stopSpeaking();
     };
   }, []);
@@ -64,38 +70,69 @@ function VoiceDock({ role, pathname }: { role: UserRole; pathname: string }) {
   }, [lang]);
 
   const run = useCallback(async (cmd: VoiceCommandResult, targets: RegisteredTarget[]) => {
-    const ok = await execute(cmd, targets, router);
-    say(ok ? cmd.speech : "That isn't available on this page any more.");
-    setPhase('idle');
-  }, [router, say]);
+    try {
+      const currentTargets = [...routeTargets(role), ...pageTargets()];
+      // Only use the same registration that was offered when the command was resolved.
+      const active = currentTargets.filter((target) => targets.some((offered) =>
+        target.kind === 'route' ? offered.id === target.id : offered === target,
+      ));
+      const ok = await execute(cmd, active, router);
+      if (mounted.current) say(ok ? cmd.speech : "That isn't available on this page any more.");
+    } catch (err) {
+      if (mounted.current) say(errorMessage(err, 'Could not complete that action.'));
+    } finally {
+      if (mounted.current) setPhase('idle');
+    }
+  }, [role, router, say]);
 
   const handle = useCallback(async (utterance: string) => {
     setHeard(utterance);
     if (!utterance) { setPhase('idle'); return; }
+    if (utterance.length > 500) {
+      say('Keep each assistant command to 500 characters or fewer. You can enter longer text in the form.');
+      setPhase('idle');
+      return;
+    }
 
     const targets: RegisteredTarget[] = [...routeTargets(role), ...pageTargets()];
     setPhase('thinking');
-    let cmd = matchLocally(utterance, targets);
+    let cmd = matchLocally(utterance, targets, !!clarification.current);
     if (!cmd) {
+      const controller = new AbortController();
+      request.current = controller;
+      const timeout = setTimeout(() => controller.abort(), requestTimeoutMs);
       try {
         const body: VoiceCommandRequest = {
           utterance,
           pathname,
           language: lang,
+          clarification: clarification.current,
           targets: targets.map(({ id, kind, label, description, confirm }) => ({ id, kind, label, description, confirm })),
         };
-        cmd = await api.post<VoiceCommandResult>('/assistant/command', body);
+        cmd = await apiFetch<VoiceCommandResult>('/assistant/command', { method: 'POST', body, signal: controller.signal });
       } catch (err) {
-        say(errorMessage(err, 'The assistant is unavailable.'));
+        if (!mounted.current) return;
+        say(controller.signal.aborted
+          ? 'The assistant took too long. Try a shorter command or use the page controls.'
+          : errorMessage(err, 'The assistant is unavailable.'));
         setPhase('idle');
         return;
+      } finally {
+        clearTimeout(timeout);
+        request.current = null;
       }
     }
 
+    if (!mounted.current) return;
+    if (window.location.pathname !== pathname) return;
+    clarification.current = cmd.kind === 'clarify' && cmd.speech
+      ? { utterance: clarification.current?.utterance ?? utterance.slice(0, 500), question: cmd.speech.slice(0, 500) }
+      : undefined;
     if (needsConfirmation(cmd, targets)) {
       setPending({ cmd, targets });
       setPhase('confirm');
-      say(`${cmd.speech} Confirm?`);
+      const target = targets.find((item) => item.id === cmd.targetId);
+      say(`${target?.label ?? cmd.speech.replace(/[.!?]$/, '')}. Confirm?`);
       return;
     }
     await run(cmd, targets);
@@ -104,26 +141,51 @@ function VoiceDock({ role, pathname }: { role: UserRole; pathname: string }) {
   const start = useCallback(async () => {
     stopSpeaking();
     setReply('');
-    setPending(null);
     setPhase('listening');
-    const current = listenOnce(lang);
-    listening.current = current;
+    let timeout: ReturnType<typeof setTimeout> | undefined;
     try {
+      const current = listenOnce(lang);
+      listening.current = current;
+      timeout = setTimeout(() => {
+        current.cancel();
+        setUseText(true);
+        say('No speech was detected. Type a command or try the microphone again.');
+      }, listeningTimeoutMs);
       const utterance = await current.result;
+      clearTimeout(timeout);
       if (!mounted.current) return;
+      if (window.location.pathname !== pathname) return;
+      if (pending) {
+        const decision = confirmationReply(utterance);
+        if (decision === 'confirm') {
+          setPending(null);
+          setPhase('thinking');
+          await run(pending.cmd, pending.targets);
+        } else if (decision === 'cancel') {
+          setPending(null);
+          setPhase('idle');
+          say('Cancelled.');
+        } else {
+          setPhase('confirm');
+          if (utterance) say('Say “confirm” or “cancel”.');
+        }
+        return;
+      }
       await handle(utterance);
     } catch (err) {
       if (!mounted.current) return;
+      setUseText(true);
       say(errorMessage(err));
-      setPhase('idle');
+      setPhase(pending ? 'confirm' : 'idle');
     } finally {
-      if (listening.current === current) listening.current = null;
+      clearTimeout(timeout);
+      listening.current = null;
     }
-  }, [lang, handle, say]);
+  }, [lang, handle, pathname, pending, run, say]);
 
   const toggle = useCallback(() => {
     if (phase === 'listening') listening.current?.cancel();
-    else if (phase === 'idle') void start();
+    else if (phase === 'idle' || phase === 'confirm') void start();
   }, [phase, start]);
 
   useEffect(() => {
@@ -138,6 +200,7 @@ function VoiceDock({ role, pathname }: { role: UserRole; pathname: string }) {
   const confirm = async () => {
     if (!pending) return;
     setPending(null);
+    setPhase('thinking');
     await run(pending.cmd, pending.targets);
   };
   const cancel = () => {
@@ -160,13 +223,13 @@ function VoiceDock({ role, pathname }: { role: UserRole; pathname: string }) {
         )}
       </div>
 
-      {speechOk ? (
+      {speechOk && !useText ? (
         <button
           type="button"
           className={styles.mic}
           data-phase={phase}
           onClick={toggle}
-          disabled={phase === 'thinking' || phase === 'confirm'}
+          disabled={phase === 'thinking'}
           aria-pressed={phase === 'listening'}
           aria-label={phase === 'listening' ? 'Stop listening' : 'Voice command (Alt+V)'}
           title="Voice command (Alt+V)"
@@ -182,12 +245,19 @@ function VoiceDock({ role, pathname }: { role: UserRole; pathname: string }) {
         >
           <input
             value={typed}
+            maxLength={500}
             onChange={(e) => setTyped(e.target.value)}
             placeholder="Type a command…"
             aria-label="Assistant command"
             disabled={phase !== 'idle'}
           />
+          <button type="submit" className={styles.cancel} disabled={phase !== 'idle' || !typed.trim()}>Send</button>
         </form>
+      )}
+      {speechOk && (
+        <button type="button" className={styles.cancel} disabled={phase !== 'idle'} onClick={() => setUseText(!useText)}>
+          {useText ? 'Use microphone' : 'Type instead'}
+        </button>
       )}
     </div>
   );

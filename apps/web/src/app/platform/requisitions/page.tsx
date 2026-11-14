@@ -1,11 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import useSWR from 'swr';
 import { CANDIDATE_TIERS, type CandidateTier, type ReqStatus, type Requisition } from '@asteai/types';
 import { api, errorMessage } from '@/lib/api';
 import { fetchAllRequisitions } from '@/lib/requisitions';
 import { Button, Empty, Eyebrow, Field, KPI, Panel, Tag, type TagColor } from '@/components/ui';
+import { useVoiceTargets, type RegisteredTarget } from '@/features/voice-assistant';
+import { spokenInteger } from '@/features/voice-assistant/localIntent';
 import styles from './requisitions.module.css';
 
 const STATUS_COLOR: Record<ReqStatus, TagColor> = {
@@ -19,6 +21,11 @@ const STATUS_COLOR: Record<ReqStatus, TagColor> = {
 export default function RequisitionsPage() {
   const { data, error, isLoading, mutate } = useSWR('/requisitions?all', fetchAllRequisitions);
   const [creating, setCreating] = useState(false);
+  useVoiceTargets(creating ? [] : [{
+    id: 'action:requisitions.new', kind: 'action', label: 'New Requisition',
+    description: 'Open the form to create a hiring requisition or draft a job.',
+    run: () => setCreating(true),
+  }]);
 
   return (
     <div className={styles.page}>
@@ -74,16 +81,20 @@ function NewRequisitionForm({ onCancel, onCreated }: { onCancel: () => void; onC
   const [brief, setBrief] = useState('');
   const [busy, setBusy] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  const form = useRef<HTMLFormElement>(null);
+  const submitting = useRef(false);
 
   const weightSum = iq + eq + grit;
   const weightsOk = [iq, eq, grit].every((w) => Number.isInteger(w) && w >= 0 && w <= 100) && weightSum === 100;
 
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
+  async function create() {
+    if (submitting.current) return false;
     if (!weightsOk) {
       setFormError('IQ, EQ and Grit weights must be whole numbers that add up to 100.');
-      return;
+      return false;
     }
+    if (!form.current?.reportValidity()) return false;
+    submitting.current = true;
     setBusy(true);
     setFormError(null);
     try {
@@ -103,18 +114,56 @@ function NewRequisitionForm({ onCancel, onCreated }: { onCancel: () => void; onC
         brief: brief.trim() || undefined,
       });
       onCreated();
+      return true;
     } catch (err) {
-      setFormError(errorMessage(err, 'Could not create the requisition'));
+      const message = errorMessage(err, 'Could not create the requisition');
+      setFormError(message);
+      throw new Error(message);
     } finally {
+      submitting.current = false;
       setBusy(false);
     }
   }
 
   const int = (v: string) => (v === '' ? 0 : Math.trunc(Number(v)));
+  const fields: RegisteredTarget[] = ([
+    ['title', 'Title', 200, setTitle],
+    ['industry', 'Industry', 80, setIndustry],
+    ['function', 'Function', 80, setFunc],
+    ['language', 'Assessment language', 40, setLang],
+    ['location', 'Location', 120, setLocation],
+    ['brief', 'Brief', 10000, setBrief],
+  ] as const).map(([id, label, maxLength, set]) => ({
+    id: `field:requisitions.${id}`, kind: 'field', label,
+    run: (value) => {
+      if (!value?.trim() || value.length > maxLength) throw new Error(`Enter a ${label.toLowerCase()} of up to ${maxLength} characters.`);
+      set(value);
+    },
+  }));
+  useVoiceTargets(busy ? [] : [
+    ...fields,
+    {
+      id: 'field:requisitions.headcount', kind: 'field', label: 'Headcount',
+      run: (value) => {
+        const headcount = spokenInteger(value);
+        if (headcount < 1 || headcount > 10000) {
+          throw new Error('Enter a headcount between 1 and 10,000.');
+        }
+        setHeadcount(headcount);
+      },
+    },
+    {
+      id: 'action:requisitions.create', kind: 'action', label: 'Create requisition', confirm: true,
+      run: async () => {
+        if (!(await create())) throw new Error('Check the required fields and assessment weights before creating the requisition.');
+      },
+    },
+  ]);
 
   return (
     <Panel>
-      <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+      <form ref={form} onSubmit={(event) => { event.preventDefault(); void create().catch(() => {}); }}
+        style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
         <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 600 }}>New Requisition</h3>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px' }}>
           <Field label="Title">

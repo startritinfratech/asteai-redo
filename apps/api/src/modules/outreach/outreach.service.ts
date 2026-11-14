@@ -94,7 +94,7 @@ export class OutreachService {
     if (!valid.length) throw new BadRequestException(invalid.length ? 'None of the addresses are valid' : 'No recipients');
 
     const { rows } = await this.db.query<CampaignRow>(
-      `INSERT INTO outreach_campaigns
+      `INSERT INTO ats_outreach_campaigns
          (tenant_id, created_by, name, subject_template, body_template, requisition_id, pool_id, rate_per_minute, recipients)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb) RETURNING *`,
       [tenantId, user.id, input.name.trim(), input.subjectTemplate.trim(), input.bodyTemplate.trim(), input.requisitionId ?? null,
@@ -106,7 +106,7 @@ export class OutreachService {
   private async load(db: Pick<PoolClient, 'query'>, user: User, id: string, forUpdate = false): Promise<CampaignRow> {
     if (!UUID.test(id)) throw new NotFoundException('Campaign not found');
     const { rows } = await db.query<CampaignRow>(
-      `SELECT * FROM outreach_campaigns WHERE id = $1 AND tenant_id = $2 ${forUpdate ? 'FOR UPDATE' : ''}`, [id, tenantOf(user)],
+      `SELECT * FROM ats_outreach_campaigns WHERE id = $1 AND tenant_id = $2 ${forUpdate ? 'FOR UPDATE' : ''}`, [id, tenantOf(user)],
     );
     if (!rows.length) throw new NotFoundException('Campaign not found');
     return rows[0];
@@ -174,7 +174,7 @@ export class OutreachService {
         [campaign.id, campaign.tenant_id, JSON.stringify(messages)],
       );
       const { rows } = await c.query<CampaignRow>(
-        `UPDATE outreach_campaigns SET status = 'queued', queued_at = NOW(), updated_at = NOW() WHERE id = $1 RETURNING *`, [campaign.id],
+        `UPDATE ats_outreach_campaigns SET status = 'queued', queued_at = NOW(), updated_at = NOW() WHERE id = $1 RETURNING *`, [campaign.id],
       );
       return this.map(rows[0], await this.delivery(c, campaign.id));
     });
@@ -189,7 +189,7 @@ export class OutreachService {
       }
       await c.query(`UPDATE outreach_messages SET status = 'cancelled' WHERE campaign_id = $1 AND status = 'queued'`, [id]);
       const { rows } = await c.query<CampaignRow>(
-        `UPDATE outreach_campaigns SET status = 'cancelled', completed_at = NOW(), updated_at = NOW() WHERE id = $1 RETURNING *`, [id],
+        `UPDATE ats_outreach_campaigns SET status = 'cancelled', completed_at = NOW(), updated_at = NOW() WHERE id = $1 RETURNING *`, [id],
       );
       return this.map(rows[0], await this.delivery(c, id));
     });
@@ -197,7 +197,7 @@ export class OutreachService {
 
   async list(user: User): Promise<OutreachEmailCampaign[]> {
     const { rows } = await this.db.query<CampaignRow>(
-      `SELECT * FROM outreach_campaigns WHERE tenant_id = $1 ORDER BY created_at DESC LIMIT 100`, [tenantOf(user)],
+      `SELECT * FROM ats_outreach_campaigns WHERE tenant_id = $1 ORDER BY created_at DESC LIMIT 100`, [tenantOf(user)],
     );
     return Promise.all(rows.map(async (r) => this.map(r, r.status === 'draft' ? null : await this.delivery(this.db, r.id))));
   }

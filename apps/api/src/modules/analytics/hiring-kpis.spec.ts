@@ -6,7 +6,7 @@ import { AnalyticsService } from './analytics.service';
 function setup(over: { median?: string | null; reviewed?: number; matched?: number } = {}) {
   return fakeDb([
     [/FROM requisitions r WHERE/, [{ open: 4, pending: 2 }]],
-    [/FROM outreach_campaigns c WHERE c.status = 'queued'/, [{ active: 1 }]],
+    [/FROM ats_outreach_campaigns c WHERE c.status = 'queued'/, [{ active: 1 }]],
     [/PERCENTILE_CONT\(0.5\)/, [{ median_days: over.median === undefined ? '23.456' : over.median, hires: over.median === null ? 0 : 3 }]],
     [/AS reviewed/, [{ reviewed: over.reviewed ?? 40, matched: over.matched ?? 14 }]],
     [/GROUP BY a.stage/, [{ stage: 'Applied', n: 10 }, { stage: 'Interview', n: 3 }]],

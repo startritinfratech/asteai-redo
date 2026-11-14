@@ -1,24 +1,24 @@
 import type { Metadata, Viewport } from 'next';
-import { Sora, Manrope, JetBrains_Mono } from 'next/font/google';
+import localFont from 'next/font/local';
 import '@/styles/globals.css';
 import { THEME_INIT_SCRIPT } from '@/lib/theme';
 import { SITE_NAME, TWITTER_HANDLE } from '@/lib/site';
 
-const sora = Sora({
-  subsets: ['latin'],
-  weight: ['500', '600', '700', '800'],
+const sora = localFont({
+  src: './fonts/sora.woff2',
+  weight: '500 800',
   variable: '--font-sora',
 });
 
-const manrope = Manrope({
-  subsets: ['latin'],
-  weight: ['400', '500', '600', '700'],
+const manrope = localFont({
+  src: './fonts/manrope.woff2',
+  weight: '400 700',
   variable: '--font-manrope',
 });
 
-const mono = JetBrains_Mono({
-  subsets: ['latin'],
-  weight: ['400', '500', '600'],
+const mono = localFont({
+  src: './fonts/jetbrains-mono.woff2',
+  weight: '400 600',
   variable: '--font-jetbrains',
 });
 

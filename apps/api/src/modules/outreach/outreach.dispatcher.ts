@@ -62,7 +62,7 @@ export class OutreachDispatcher implements OnApplicationBootstrap, OnApplication
         `SELECT m.id, m.tenant_id, m.to_email, m.subject, m.body, t.name AS company,
                 EXISTS (SELECT 1 FROM outreach_suppressions s WHERE s.tenant_id = m.tenant_id AND s.email = LOWER(m.to_email)) AS suppressed
            FROM outreach_messages m
-           JOIN outreach_campaigns c ON c.id = m.campaign_id AND c.status = 'queued'
+           JOIN ats_outreach_campaigns c ON c.id = m.campaign_id AND c.status = 'queued'
            JOIN tenants t ON t.id = m.tenant_id
           WHERE m.status = 'queued' AND m.send_after <= NOW()
           ORDER BY m.send_after
@@ -89,7 +89,7 @@ export class OutreachDispatcher implements OnApplicationBootstrap, OnApplication
       }
       // A queued campaign with nothing left to release is complete.
       await c.query(
-        `UPDATE outreach_campaigns c SET status = 'completed', completed_at = NOW(), updated_at = NOW()
+        `UPDATE ats_outreach_campaigns c SET status = 'completed', completed_at = NOW(), updated_at = NOW()
           WHERE c.status = 'queued'
             AND NOT EXISTS (SELECT 1 FROM outreach_messages m WHERE m.campaign_id = c.id AND m.status = 'queued')`,
       );

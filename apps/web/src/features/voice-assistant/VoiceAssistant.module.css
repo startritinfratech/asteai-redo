@@ -92,8 +92,16 @@
   outline-offset: 2px;
 }
 
+.typed {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+
 .typed input {
-  width: 220px;
+  width: min(220px, 48vw);
+  min-width: 0;
   padding: 10px 12px;
   border-radius: 10px;
   border: 1px solid var(--line-2);

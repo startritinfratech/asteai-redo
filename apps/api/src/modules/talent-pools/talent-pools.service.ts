@@ -40,7 +40,7 @@ export class TalentPoolsService {
   async list(user: User): Promise<TalentPoolSummary[]> {
     const { rows } = await this.db.query<PoolRow>(
       `SELECT p.*, (SELECT COUNT(*) FROM talent_pool_members m WHERE m.pool_id = p.id)::int AS member_count
-         FROM talent_pools p WHERE p.tenant_id = $1 AND p.archived_at IS NULL ORDER BY p.updated_at DESC`,
+         FROM ats_talent_pools p WHERE p.tenant_id = $1 AND p.archived_at IS NULL ORDER BY p.updated_at DESC`,
       [tenantOf(user)],
     );
     return rows.map(mapPool);
@@ -50,7 +50,7 @@ export class TalentPoolsService {
     const columns = input.columns ? normalizeColumns(input.columns) : DEFAULT_COLUMNS;
     if ('error' in columns) throw new BadRequestException(columns.error);
     const { rows } = await this.db.query<PoolRow>(
-      `INSERT INTO talent_pools (tenant_id, name, description, columns, created_by)
+      `INSERT INTO ats_talent_pools (tenant_id, name, description, columns, created_by)
        VALUES ($1, $2, $3, $4::jsonb, $5) RETURNING *`,
       [tenantOf(user), input.name.trim(), input.description?.trim() ?? '', JSON.stringify(columns), user.id],
     );
@@ -61,7 +61,7 @@ export class TalentPoolsService {
   private async load(db: Db, user: User, id: string, forUpdate = false): Promise<PoolRow> {
     if (!UUID.test(id)) throw new NotFoundException('Pool not found');
     const { rows } = await db.query<PoolRow>(
-      `SELECT * FROM talent_pools WHERE id = $1 AND tenant_id = $2 AND archived_at IS NULL ${forUpdate ? 'FOR UPDATE' : ''}`,
+      `SELECT * FROM ats_talent_pools WHERE id = $1 AND tenant_id = $2 AND archived_at IS NULL ${forUpdate ? 'FOR UPDATE' : ''}`,
       [id, tenantOf(user)],
     );
     if (!rows.length) throw new NotFoundException('Pool not found');
@@ -89,7 +89,7 @@ export class TalentPoolsService {
         columns = next;
       }
       const { rows } = await c.query<PoolRow>(
-        `UPDATE talent_pools SET name = COALESCE($2, name), description = COALESCE($3, description),
+        `UPDATE ats_talent_pools SET name = COALESCE($2, name), description = COALESCE($3, description),
                 columns = $4::jsonb, updated_at = NOW()
           WHERE id = $1 RETURNING *`,
         [id, input.name?.trim() || null, input.description?.trim() ?? null, JSON.stringify(columns)],
@@ -100,7 +100,7 @@ export class TalentPoolsService {
 
   async archive(user: User, id: string) {
     await this.load(this.db, user, id);
-    await this.db.query(`UPDATE talent_pools SET archived_at = NOW(), updated_at = NOW() WHERE id = $1`, [id]);
+    await this.db.query(`UPDATE ats_talent_pools SET archived_at = NOW(), updated_at = NOW() WHERE id = $1`, [id]);
     return { id, archived: true };
   }
 
@@ -143,7 +143,7 @@ export class TalentPoolsService {
          RETURNING id`,
         [id, column, user.id, JSON.stringify(valid.map((v, i) => ({ email: v.email, full_name: v.fullName, position: positions[i], tags: v.tags })))],
       );
-      await c.query(`UPDATE talent_pools SET updated_at = NOW() WHERE id = $1`, [id]);
+      await c.query(`UPDATE ats_talent_pools SET updated_at = NOW() WHERE id = $1`, [id]);
       return { added: rows.length, alreadyInPool: valid.length - rows.length, invalid };
     });
   }
@@ -191,7 +191,7 @@ export class TalentPoolsService {
         [memberId, poolId, input.column, positionBetween(before, after)],
       );
       if (!rows.length) throw new NotFoundException('Card not found');
-      await c.query(`UPDATE talent_pools SET updated_at = NOW() WHERE id = $1`, [poolId]);
+      await c.query(`UPDATE ats_talent_pools SET updated_at = NOW() WHERE id = $1`, [poolId]);
       return mapMember(rows[0]);
     });
   }

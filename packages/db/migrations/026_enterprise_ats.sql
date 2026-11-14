@@ -33,7 +33,9 @@ ON CONFLICT (feature) DO NOTHING;
 
 -- ── Talent CRM pools (Kanban) ─────────────────────────────────────────────────
 
-CREATE TABLE IF NOT EXISTS talent_pools (
+-- 001 has summary-only tables with prefixed text IDs. Use separate tables for
+-- the UUID-based boards and campaigns so the original tenant endpoints still work.
+CREATE TABLE IF NOT EXISTS ats_talent_pools (
   id           UUID          PRIMARY KEY DEFAULT uuid_generate_v4(),
   tenant_id    VARCHAR(64)   NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
   name         VARCHAR(120)  NOT NULL,
@@ -45,11 +47,11 @@ CREATE TABLE IF NOT EXISTS talent_pools (
   created_at   TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
   updated_at   TIMESTAMPTZ   NOT NULL DEFAULT NOW()
 );
-CREATE INDEX IF NOT EXISTS idx_talent_pools_tenant ON talent_pools(tenant_id) WHERE archived_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_ats_talent_pools_tenant ON ats_talent_pools(tenant_id) WHERE archived_at IS NULL;
 
 CREATE TABLE IF NOT EXISTS talent_pool_members (
   id          UUID              PRIMARY KEY DEFAULT uuid_generate_v4(),
-  pool_id     UUID              NOT NULL REFERENCES talent_pools(id) ON DELETE CASCADE,
+  pool_id     UUID              NOT NULL REFERENCES ats_talent_pools(id) ON DELETE CASCADE,
   -- A platform user, or an external prospect known only by email.
   user_id     UUID              REFERENCES user_accounts(id) ON DELETE SET NULL,
   email       VARCHAR(255)      NOT NULL,
@@ -71,7 +73,7 @@ CREATE INDEX IF NOT EXISTS idx_talent_pool_members_board ON talent_pool_members(
 -- email_outbox by the dispatcher no faster than rate_per_minute (send_after staggers
 -- them), so delivery status comes from the outbox row each message points at.
 
-CREATE TABLE IF NOT EXISTS outreach_campaigns (
+CREATE TABLE IF NOT EXISTS ats_outreach_campaigns (
   id                UUID          PRIMARY KEY DEFAULT uuid_generate_v4(),
   tenant_id         VARCHAR(64)   NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
   created_by        UUID          REFERENCES user_accounts(id) ON DELETE SET NULL,
@@ -79,7 +81,7 @@ CREATE TABLE IF NOT EXISTS outreach_campaigns (
   subject_template  VARCHAR(200)  NOT NULL,
   body_template     TEXT          NOT NULL CHECK (char_length(body_template) <= 10000),
   requisition_id    VARCHAR(64)   REFERENCES requisitions(id) ON DELETE SET NULL,
-  pool_id           UUID          REFERENCES talent_pools(id) ON DELETE SET NULL,
+  pool_id           UUID          REFERENCES ats_talent_pools(id) ON DELETE SET NULL,
   status            VARCHAR(10)   NOT NULL DEFAULT 'draft'
                                   CHECK (status IN ('draft', 'queued', 'completed', 'cancelled')),
   rate_per_minute   SMALLINT      NOT NULL DEFAULT 60 CHECK (rate_per_minute BETWEEN 1 AND 300),
@@ -89,11 +91,11 @@ CREATE TABLE IF NOT EXISTS outreach_campaigns (
   created_at        TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
   updated_at        TIMESTAMPTZ   NOT NULL DEFAULT NOW()
 );
-CREATE INDEX IF NOT EXISTS idx_outreach_campaigns_tenant ON outreach_campaigns(tenant_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_ats_outreach_campaigns_tenant ON ats_outreach_campaigns(tenant_id, created_at DESC);
 
 CREATE TABLE IF NOT EXISTS outreach_messages (
   id           UUID          PRIMARY KEY DEFAULT uuid_generate_v4(),
-  campaign_id  UUID          NOT NULL REFERENCES outreach_campaigns(id) ON DELETE CASCADE,
+  campaign_id  UUID          NOT NULL REFERENCES ats_outreach_campaigns(id) ON DELETE CASCADE,
   tenant_id    VARCHAR(64)   NOT NULL,
   to_email     VARCHAR(255)  NOT NULL,
   to_name      VARCHAR(160)  NOT NULL DEFAULT '',

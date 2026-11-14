@@ -45,7 +45,7 @@ describe('Talent CRM board helpers', () => {
   it('moving a card between two others writes one row at the midpoint', async () => {
     const pool = { id: '11111111-1111-4111-8111-111111111111', tenant_id: 'T1', columns: [{ key: 'sourced', label: 'Sourced' }, { key: 'engaged', label: 'Engaged' }] };
     const db = fakeDb([
-      [/FROM talent_pools WHERE id = \$1 AND tenant_id = \$2/, [pool]],
+      [/FROM ats_talent_pools WHERE id = \$1 AND tenant_id = \$2/, [pool]],
       [/SELECT position, column_key FROM talent_pool_members/, (p) => [{ position: p[0] === 'before' ? 1024 : 2048, column_key: 'engaged' }]],
       [/UPDATE talent_pool_members SET column_key/, (p) => [{ id: p[0], column_key: p[2], position: p[3], email: 'x@y.z', full_name: '', tags: [], notes: '', user_id: null, updated_at: new Date() }]],
     ]);
@@ -104,7 +104,7 @@ describe('OutreachService.queue (rate limit and suppression)', () => {
   ];
   function setup(usedToday: number, dailyLimit = 2000, suppressed: string[] = []) {
     const db = fakeDb([
-      [/FROM outreach_campaigns WHERE id = \$1 AND tenant_id = \$2 FOR UPDATE/, [{
+      [/FROM ats_outreach_campaigns WHERE id = \$1 AND tenant_id = \$2 FOR UPDATE/, [{
         id: CAMPAIGN, tenant_id: 'T1', created_by: 'e1', name: 'SRE push', subject_template: '{{jobTitle}} at {{companyName}}',
         body_template: 'Hi {{firstName}},\n\n{{senderName}}', requisition_id: 'REQ-1', pool_id: null, status: 'draft',
         rate_per_minute: 2, recipients, queued_at: null, completed_at: null, created_at: new Date(),
@@ -112,7 +112,7 @@ describe('OutreachService.queue (rate limit and suppression)', () => {
       [/SELECT COUNT\(\*\)::int AS n FROM outreach_messages/, [{ n: usedToday }]],
       [/FROM tenants t\s+LEFT JOIN requisitions/, [{ company: 'Acme', job_title: 'SRE', sender: 'Esha K' }]],
       [/FROM outreach_suppressions WHERE tenant_id/, suppressed.map((email) => ({ email }))],
-      [/UPDATE outreach_campaigns SET status = 'queued'/, [{ id: CAMPAIGN, status: 'queued', recipients, rate_per_minute: 2, created_at: new Date() }]],
+      [/UPDATE ats_outreach_campaigns SET status = 'queued'/, [{ id: CAMPAIGN, status: 'queued', recipients, rate_per_minute: 2, created_at: new Date() }]],
       [/COUNT\(\*\)::int AS total/, [{ total: 3, queued: 2, sending: 0, sent: 0, failed: 0, skipped: 1, cancelled: 0 }]],
     ]);
     return { db, svc: new OutreachService(db.pool, {} as TalentPoolsService, { dailyLimit, unsubscribeSecret: SECRET }) };
@@ -148,7 +148,7 @@ describe('OutreachService.queue (rate limit and suppression)', () => {
 describe('OutreachDispatcher', () => {
   it('releases due messages into email_outbox in the same transaction, skipping new unsubscribes', async () => {
     const db = fakeDb([
-      [/FROM outreach_messages m\s+JOIN outreach_campaigns c/, [
+      [/FROM outreach_messages m\s+JOIN ats_outreach_campaigns c/, [
         { id: 'm1', tenant_id: 'T1', to_email: 'a@x.test', subject: 'SRE at Acme', body: 'Hi', company: 'Acme', suppressed: false },
         { id: 'm2', tenant_id: 'T1', to_email: 'b@x.test', subject: 'SRE at Acme', body: 'Hi', company: 'Acme', suppressed: true },
       ]],

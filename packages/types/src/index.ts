@@ -417,6 +417,7 @@ export interface VoiceTarget {
 }
 
 export interface VoiceCommandRequest {
+  clarification?: { utterance: string; question: string };
   utterance: string;
   pathname: string;
   /** BCP-47 language of the utterance; the spoken reply uses it too. */

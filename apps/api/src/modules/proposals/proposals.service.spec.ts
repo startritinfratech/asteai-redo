@@ -81,7 +81,7 @@ describe('ProposalsService responses (camelCase Proposal)', () => {
     assert.deepEqual(out, {
       id: 'P-1', projectId: 'PRJ-1', expertId: 'fl-1', price: 45000.5, days: 10, note: '', status: 'Awarded',
       createdAt: '2026-01-02T03:04:05.000Z', updatedAt: '2026-01-02T03:04:05.000Z',
-      expertName: 'Fia Lancer', contractId: 'CT-1',
+      expertName: 'Fia Lancer', contractId: 'CT-1', sow: null,
     });
     assert.match(sql[1], /LEFT JOIN contracts c ON c.proposal_id = p.id/);
   });
