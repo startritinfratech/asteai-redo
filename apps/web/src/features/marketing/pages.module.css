@@ -174,6 +174,16 @@
   color: var(--blue-2);
   white-space: nowrap;
 }
+.costTableWrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 14px; background: var(--bg-2); }
+.costTable { width: 100%; border-collapse: collapse; font-size: .94rem; }
+.costTable caption { caption-side: bottom; text-align: left; padding: 12px 16px; color: var(--fg-3); font-size: .84rem; }
+.costTable th, .costTable td { padding: 11px 16px; text-align: left; border-bottom: 1px solid var(--line); }
+.costTable thead th { font-size: .78rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--fg-3); }
+.costTable tbody tr:last-child td, .costTable tbody tr:last-child th { border-bottom: 0; }
+.costTable tbody th { font-weight: 500; color: var(--fg-2); }
+.costTable .num { text-align: right; font-family: var(--font-mono); font-weight: 600; white-space: nowrap; }
+.costTable td.num { color: var(--blue-2); }
+.planCredits { margin: 0; font-weight: 600; color: var(--fg); }
 .subhead { font-size: 1.1rem; margin: 36px 0 14px; }
 
 /* ── FAQ ───────────────────────────────────────────────────────────────────── */

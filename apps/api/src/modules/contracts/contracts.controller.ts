@@ -107,4 +107,11 @@ export class ContractsController {
   release(@Param('id') id: string, @Param('mid', ParseUUIDPipe) mid: string, @CurrentUser() user: User) {
     return this.svc.releaseMilestone(id, mid, user);
   }
+
+  /** Approve a submitted deliverable and release its escrow to the expert in one step. */
+  @Post(':id/milestones/:mid/approve-release')
+  @Roles('Buyer')
+  approveRelease(@Param('id') id: string, @Param('mid', ParseUUIDPipe) mid: string, @CurrentUser() user: User) {
+    return this.svc.approveAndRelease(id, mid, user);
+  }
 }

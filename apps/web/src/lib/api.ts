@@ -1,12 +1,13 @@
 /**
  * Typed fetch wrapper for the AsteAI NestJS backend.
  *
- * - Attaches the bearer access token.
- * - On a 401 it refreshes the tokens once (shared by all concurrent requests, because
+ * - Sends the HttpOnly session cookies (`credentials: 'include'`); the page never sees a token.
+ * - On a 401 it refreshes the session once (shared by all concurrent requests, because
  *   refresh tokens are single-use) and retries the request.
+ * - Without the session hint cookie (anonymous visitor) a 401 never triggers a refresh.
  * - Unwraps the API's `{ data }` envelope and throws `ApiError` for non-2xx responses.
  */
-import { tokenStorage } from './tokens';
+import { hasSessionHint } from './tokens';
 
 export const API_BASE = process.env.NEXT_PUBLIC_API_URL
   ? `${process.env.NEXT_PUBLIC_API_URL.replace(/\/$/, '')}/api/v1`
@@ -47,49 +48,20 @@ function buildUrl(path: string, params?: QueryParams): string {
 
 let refreshInFlight: Promise<boolean> | null = null;
 
-/** Exchanges one refresh token for new tokens; false when the server refuses it. */
-async function exchange(userId: string, refreshToken: string): Promise<boolean> {
-  try {
-    const res = await fetch(`${API_BASE}/auth/refresh`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId, refreshToken }),
-    });
-    if (!res.ok) return false;
-    const { data } = (await res.json()) as { data: { accessToken: string; refreshToken: string } };
-    tokenStorage.set({ accessToken: data.accessToken, refreshToken: data.refreshToken });
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 /**
- * Exchanges the refresh token for new tokens. Concurrent callers share one request.
- *
- * Refresh tokens are single-use and shared by every tab through localStorage, so
- * another tab may rotate the token while this request is in flight; ours is then
- * refused. Before giving up, re-read storage: if a different token is stored now,
- * another tab refreshed successfully, so retry with its token instead of logging out.
+ * Rotates the session: the API reads the refresh cookie and sets new cookies. Concurrent
+ * callers share one request. Another tab may rotate the (single-use) token first, so a
+ * refused refresh is not final: the caller retries its request once, with whatever
+ * cookies the browser holds by then.
  */
-function refreshTokens(): Promise<boolean> {
+function refreshSession(): Promise<boolean> {
   if (refreshInFlight) return refreshInFlight;
-
-  refreshInFlight = (async () => {
-    let tried: string | null = null;
-    // A couple of attempts covers another tab rotating the token once mid-flight.
-    for (let attempt = 0; attempt < 3; attempt += 1) {
-      const { userId, refreshToken } = tokenStorage.get();
-      if (!userId || !refreshToken) return false;
-      if (refreshToken === tried) return false;
-      tried = refreshToken;
-      if (await exchange(userId, refreshToken)) return true;
-    }
-    return false;
-  })().finally(() => {
-    refreshInFlight = null;
-  });
-
+  refreshInFlight = fetch(`${API_BASE}/auth/refresh`, { method: 'POST', credentials: 'include' })
+    .then((res) => res.ok)
+    .catch(() => false)
+    .finally(() => {
+      refreshInFlight = null;
+    });
   return refreshInFlight;
 }
 
@@ -132,22 +104,20 @@ export async function apiRequest(path: string, options: RequestOptions = {}, ret
   const { body, params, headers: extraHeaders, ...init } = options;
   const headers = new Headers(extraHeaders);
   if (body !== undefined) headers.set('Content-Type', 'application/json');
-  const token = tokenStorage.getAccessToken();
-  if (token) headers.set('Authorization', `Bearer ${token}`);
 
   const response = await fetch(buildUrl(path, params), {
     ...init,
     headers,
+    credentials: 'include',
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
 
-  if (response.status === 401 && retry && refreshesOn401(path)) {
-    if (await refreshTokens()) return apiRequest(path, options, false);
-    // Another tab may have signed in again (new tokens) while ours failed: only drop
-    // the session if storage still holds the access token this request was sent with.
-    const current = tokenStorage.getAccessToken();
-    if (current && current !== token) return apiRequest(path, options, false);
-    tokenStorage.clear();
+  if (response.status === 401 && refreshesOn401(path)) {
+    if (retry && hasSessionHint()) {
+      // Refreshed by us, or (if ours was refused) possibly by another tab: retry once either way.
+      await refreshSession();
+      return apiRequest(path, options, false);
+    }
     onSessionExpired?.();
     throw new ApiError('Your session has expired. Please sign in again.', 401);
   }

@@ -2,26 +2,18 @@
 
 import { useState } from 'react';
 import useSWR from 'swr';
-import type { ApplicationSummary, ApplicationStage } from '@asteai/types';
+import { allowedNextStages, type ApplicationSummary, type ApplicationStage } from '@asteai/types';
+import { useAuthStore } from '@/store/auth';
 import { api, errorMessage, fetcher } from '@/lib/api';
 import { fetchAllRequisitions } from '@/lib/requisitions';
 import { Empty, Field, PageHeader, Panel, Tag } from '@/components/ui';
 
-const STAGES: ApplicationStage[] = [
-  'Applied',
-  'Assessment Pending',
-  'Assessment Review',
-  'Shortlisted',
-  'Interview',
-  'Offer',
-  'Joined',
-  'Rejected',
-];
 
 export default function PipelinePage() {
   // All requisitions, not just the API's first page of 20.
   const { data: reqs } = useSWR('/requisitions?all', fetchAllRequisitions);
   const [selectedReq, setSelectedReq] = useState<string>('');
+  const isAdmin = useAuthStore((s) => s.user?.role === 'Admin');
 
   const activeReqId = selectedReq || (reqs && reqs.length > 0 ? reqs[0].id : '');
 
@@ -97,13 +89,15 @@ export default function PipelinePage() {
 
             <div style={{ marginTop: '6px' }}>
               <Field label="Advance Candidate Stage">
+                {/* Only the moves the API allows from this stage (Applied → Screened → Interview → Shortlisted → Offer). */}
                 <select
-                  disabled={updatingId === app.id}
+                  disabled={updatingId === app.id || allowedNextStages(app.stage, isAdmin).length === 0}
                   value={app.stage}
                   onChange={(e) => handleStageChange(app.id, e.target.value as ApplicationStage)}
                 >
-                  {STAGES.map((s) => (
-                    <option key={s} value={s}>{s}</option>
+                  <option value={app.stage}>{app.stage}</option>
+                  {allowedNextStages(app.stage, isAdmin).map((s) => (
+                    <option key={s} value={s}>→ {s}</option>
                   ))}
                 </select>
               </Field>

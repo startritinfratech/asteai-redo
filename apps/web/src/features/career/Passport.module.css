@@ -1,0 +1,51 @@
+/* Public Verified Talent Passport (/passport/[slug]). Safe down to 360px wide. */
+
+.wrap { max-width: 880px; margin: 0 auto; padding: 32px 16px 64px; display: flex; flex-direction: column; gap: 18px; }
+
+.card {
+  position: relative; overflow: hidden;
+  border-radius: 22px; border: 1px solid var(--line-2);
+  background: linear-gradient(150deg, var(--blue-soft, var(--bg-3)), var(--bg-2) 55%);
+  padding: 26px 24px; display: flex; flex-direction: column; gap: 18px;
+}
+.cardHead { display: flex; flex-wrap: wrap; gap: 16px; justify-content: space-between; align-items: flex-start; }
+.eyebrow { font-size: .72rem; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; color: var(--blue-2); margin: 0; }
+.name { margin: 4px 0 0; font-size: clamp(1.6rem, 4vw, 2.2rem); line-height: 1.15; color: var(--fg); }
+.headline { margin: 6px 0 0; color: var(--fg-2); }
+.score { text-align: right; }
+.scoreValue { font-family: var(--font-mono); font-size: 3rem; font-weight: 800; line-height: 1; color: var(--fg); }
+.scoreLabel { color: var(--fg-3); font-size: .82rem; }
+@media (max-width: 520px) { .score { text-align: left; } }
+
+.section { border: 1px solid var(--line); border-radius: 16px; background: var(--bg-2); padding: 18px; display: flex; flex-direction: column; gap: 12px; }
+.h2 { margin: 0; font-size: 1rem; color: var(--fg); }
+.muted { margin: 0; color: var(--fg-3); font-size: .84rem; }
+
+.verify { display: flex; flex-direction: column; gap: 8px; }
+.badge {
+  display: flex; gap: 10px; align-items: center; padding: 10px 14px; border-radius: 12px; font-size: .9rem;
+  border: 1px solid var(--line-2); background: var(--bg);
+}
+.badge > span[aria-hidden] { font-size: 1.2rem; font-weight: 800; }
+.badge strong { display: block; }
+.badgeSub { display: block; font-size: .78rem; color: var(--fg-3); overflow-wrap: anywhere; }
+.badgeOk { border-color: var(--mint); color: var(--fg); }
+.badgeOk > span[aria-hidden] { color: var(--mint); }
+.badgeBad { border-color: var(--rose); }
+.badgeBad > span[aria-hidden] { color: var(--rose); }
+.badgeChecking { color: var(--fg-3); }
+.code { margin: 0; font-size: .82rem; color: var(--fg-3); }
+.code span { font-family: var(--font-mono); color: var(--fg); }
+.proofToggle { align-self: flex-start; background: none; border: 0; padding: 0; color: var(--blue-2); font-weight: 600; font-size: .84rem; cursor: pointer; }
+.proof { margin: 0; display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 6px 12px; font-size: .78rem; }
+.proof dt { color: var(--fg-3); }
+.proof dd { margin: 0; overflow-wrap: anywhere; }
+.proof code { font-family: var(--font-mono); }
+
+.creds { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; }
+.cred { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 4px; font-size: .85rem; }
+.cred a { color: var(--blue-2); font-weight: 600; font-family: var(--font-mono); font-size: .8rem; }
+
+.share { display: flex; flex-wrap: wrap; gap: 8px; }
+.shareBtn { border: 1px solid var(--line-2); background: var(--bg); color: var(--fg); border-radius: 999px; padding: 7px 14px; font-weight: 600; font-size: .85rem; cursor: pointer; }
+.shareBtn:hover { border-color: var(--blue); }

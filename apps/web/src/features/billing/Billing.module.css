@@ -8,6 +8,7 @@
 .grow { flex: 1 1 160px; min-width: 0; }
 .alignEnd { align-self: flex-end; }
 .h2 { font-size: .95rem; font-weight: 600; margin: 0; color: var(--fg); }
+.sectionTitle { font-size: 1.05rem; font-weight: 700; margin: 8px 0 0; color: var(--fg); }
 .muted { color: var(--fg-3); font-size: .8rem; margin: 0; }
 .mono { font-family: var(--font-mono); overflow-wrap: anywhere; }
 .error { color: var(--rose); font-size: .82rem; margin: 0; }

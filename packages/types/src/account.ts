@@ -12,10 +12,21 @@ export const PASSWORD_MAX_LENGTH = 256;
 export const TOTP_DIGITS = 6;
 export const BACKUP_CODE_COUNT = 10;
 
+/** Tokens as AuthService issues them (server side only; never sent to the browser). */
 export interface AuthTokensResponse {
   accessToken: string;
   refreshToken: string;
   user: User;
+}
+
+/**
+ * What login, register, refresh, 2FA login and password change return to the browser.
+ * The tokens themselves travel only as HttpOnly cookies.
+ */
+export interface SessionResponse {
+  user: User;
+  /** This session's id (the refresh-token row), to mark "this device" in the sessions list. */
+  sessionId: string;
 }
 
 /** POST /auth/login when the account has two-factor authentication on. */
@@ -25,7 +36,7 @@ export interface TwoFactorChallengeResponse {
   challenge: string;
 }
 
-export type LoginResponse = AuthTokensResponse | TwoFactorChallengeResponse;
+export type LoginResponse = SessionResponse | TwoFactorChallengeResponse;
 
 export interface TwoFactorLoginRequest {
   challenge: string;

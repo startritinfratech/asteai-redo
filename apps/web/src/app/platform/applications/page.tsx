@@ -9,6 +9,7 @@ import styles from './applications.module.css';
 
 const STAGE_COLOR: Record<ApplicationStage, TagColor> = {
   Applied: 'grey',
+  Screened: 'default',
   Eligibility: 'grey',
   'Assessment Pending': 'amber',
   'Assessment Review': 'amber',

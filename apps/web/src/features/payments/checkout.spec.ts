@@ -22,6 +22,13 @@ test('checkout options tolerate a missing prefill and cap the description', () =
   assert.equal(String(opts.description).length, 255);
 });
 
+test('subscription checkout passes only the subscription id (Razorpay knows the plan amount)', () => {
+  const opts = checkoutOptions({ subscriptionId: 'sub_1', keyId: 'k', name: 'AsteAI Pro', description: 'INR 499 / month' });
+  assert.equal(opts.subscription_id, 'sub_1');
+  assert.equal('order_id' in opts, false);
+  assert.equal('amount' in opts, false);
+});
+
 test('payment messages tell the buyer what happened', () => {
   assert.match(PAYMENT_MESSAGES.pending, /when the bank confirms/);
   assert.match(PAYMENT_MESSAGES.failed('Card declined'), /Card declined/);

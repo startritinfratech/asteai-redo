@@ -35,6 +35,7 @@ const item = (slug: string, label: string, ready = true): NavItem => ({ slug, la
 export const NAV: Record<UserRole, NavSection[]> = {
   Employer: [
     ['Hire & ATS', [
+      item('hire', 'Hire Workspace'),
       item('requisitions', 'Requisitions'),
       item('pipeline', 'Applications Pipeline'),
       item('interviews', 'Interviews & Offers'),
@@ -56,6 +57,7 @@ export const NAV: Record<UserRole, NavSection[]> = {
   ],
   Candidate: [
     ['Careers & AI Prep', [
+      item('career', 'Career Command Center'),
       item('applications', 'My Applications'),
       item('assess', 'Take Assessment'),
       item('passport', 'Talent Passport'),
@@ -81,6 +83,7 @@ export const NAV: Record<UserRole, NavSection[]> = {
       item('wallet', 'Wallet'),
       item('invoices', 'Invoices'),
       item('passport', 'Talent Passport'),
+      item('career', 'Career Studio'),
     ]],
     ['Account', [
       item('messages', 'Messages'),
@@ -112,6 +115,7 @@ export const NAV: Record<UserRole, NavSection[]> = {
   Admin: [
     ['Master Control', [
       item('admin', 'Master Control'),
+      item('hire/approvals', 'Job Approvals'),
       item('ai-interviews', 'AI Interviews'),
       item('assessment-sessions', 'Assessment Sessions'),
       item('expert-approvals', 'Expert Approvals'),

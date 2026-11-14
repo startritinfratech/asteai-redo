@@ -1,9 +1,9 @@
 import { Module } from '@nestjs/common';
-import { RequisitionsController } from './requisitions.controller';
+import { AdminRequisitionsController, RequisitionsController } from './requisitions.controller';
 import { RequisitionsService } from './requisitions.service';
 
 @Module({
-  controllers: [RequisitionsController],
+  controllers: [RequisitionsController, AdminRequisitionsController],
   providers:   [RequisitionsService],
   exports:     [RequisitionsService],
 })

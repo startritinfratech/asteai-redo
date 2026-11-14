@@ -1,5 +1,6 @@
 import {
   Body, Controller, Delete, Get, HttpCode, HttpStatus, Logger, Param, ParseUUIDPipe, Post, Req, UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { AuthGuard } from '@nestjs/passport';
@@ -10,6 +11,7 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { AccountSecurityService } from './account-security.service';
 import { sessionMetaFrom } from './auth.service';
 import { TwoFactorService } from './two-factor.service';
+import { SessionCookieInterceptor } from './session-cookie.interceptor';
 import {
   ChangePasswordDto, DisableTwoFactorDto, ForgotPasswordDto, ResetPasswordDto, TwoFactorCodeDto, TwoFactorLoginDto,
   VerifyEmailDto,
@@ -20,6 +22,7 @@ const jwt = AuthGuard('jwt');
 /** Password reset/change, email verification, two-factor authentication and sessions. */
 @ApiTags('auth')
 @Controller('auth')
+@UseInterceptors(SessionCookieInterceptor)
 export class AccountController {
   private readonly logger = new Logger(AccountController.name);
 

@@ -34,14 +34,15 @@ function wsOriginOf(origin) {
 }
 
 /**
- * @param {{ apiUrl?: string, wsUrl?: string, dev?: boolean }} opts
+ * @param {{ apiUrl?: string, wsUrl?: string, uploadUrl?: string, dev?: boolean }} opts
+ *   uploadUrl: the S3 bucket origin résumés are PUT to directly (presigned URL).
  * @returns {string}
  */
-function buildCsp({ apiUrl, wsUrl, dev = false } = {}) {
+function buildCsp({ apiUrl, wsUrl, uploadUrl, dev = false } = {}) {
   const api = originOf(apiUrl);
   const ws = originOf(wsUrl) ?? api;
   const connect = new Set(["'self'", THIRD_PARTY.turnstile, THIRD_PARTY.razorpayApi, THIRD_PARTY.razorpayLog]);
-  for (const o of [api, ws, wsOriginOf(ws)]) if (o) connect.add(o);
+  for (const o of [api, ws, wsOriginOf(ws), originOf(uploadUrl)]) if (o) connect.add(o);
 
   const directives = {
     'default-src': ["'self'"],
@@ -64,7 +65,7 @@ function buildCsp({ apiUrl, wsUrl, dev = false } = {}) {
 }
 
 /**
- * @param {{ apiUrl?: string, wsUrl?: string, dev?: boolean }} opts
+ * @param {{ apiUrl?: string, wsUrl?: string, uploadUrl?: string, dev?: boolean }} opts
  * @returns {{ key: string, value: string }[]}
  */
 function buildSecurityHeaders(opts = {}) {

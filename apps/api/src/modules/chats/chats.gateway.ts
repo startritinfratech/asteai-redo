@@ -9,6 +9,7 @@ import {
 import type { DefaultEventsMap, Namespace, Socket } from 'socket.io';
 import type { User } from '@asteai/types';
 import type { JwtPayload } from '../auth/strategies/jwt.strategy';
+import { ACCESS_COOKIE, allowedOrigins, cookieFromHeader } from '../auth/session-cookies';
 import type { ChatTypingEvent } from './chat.types';
 import { ChatsService } from './chats.service';
 import { ChatsRealtime, chatRoom, userRoom } from './chats.realtime';
@@ -25,9 +26,20 @@ interface SocketData {
 
 type ChatSocket = Socket<DefaultEventsMap, DefaultEventsMap, DefaultEventsMap, SocketData>;
 
-/** Reads the access token from `handshake.auth.token` (never the URL, where it would end up in logs). */
-export function handshakeToken(socket: Pick<Socket, 'handshake'>): string | null {
-  const token = (socket.handshake.auth as { token?: unknown } | undefined)?.token;
+/**
+ * Reads the access token from `handshake.auth.token`, else from the HttpOnly access cookie
+ * the browser sends with the handshake (never the URL, where it would end up in logs).
+ */
+export function handshakeToken(
+  socket: Pick<Socket, 'handshake'>,
+  origins: () => readonly string[] = () => [],
+): string | null {
+  const explicit = (socket.handshake.auth as { token?: unknown } | undefined)?.token;
+  if (typeof explicit === 'string' && explicit) return explicit.length < 4096 ? explicit : null;
+  // WebSocket upgrades skip CORS, so a cookie only counts from one of the web app's origins.
+  const origin = socket.handshake.headers?.origin;
+  if (!origin || !origins().includes(origin)) return null;
+  const token = cookieFromHeader(socket.handshake.headers?.cookie, ACCESS_COOKIE);
   return typeof token === 'string' && token.length > 0 && token.length < 4096 ? token : null;
 }
 
@@ -67,7 +79,7 @@ export class ChatsGateway implements OnGatewayInit, OnGatewayConnection, OnGatew
 
   /** Verifies the token exactly as JwtStrategy does and loads the (still active) user. */
   async authenticate(socket: ChatSocket): Promise<void> {
-    const token = handshakeToken(socket);
+    const token = handshakeToken(socket, () => allowedOrigins(this.config));
     if (!token) throw new Error('missing token');
     const payload = await this.jwt.verifyAsync<JwtPayload & { exp?: number; iat?: number; purpose?: unknown }>(token, {
       secret: this.config.getOrThrow<string>('JWT_SECRET'),

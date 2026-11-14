@@ -7,8 +7,11 @@ import type { EmploymentType, JobLocationType, PublicJob } from '@asteai/types';
 
 export const JOB_PAGE_MAX = 50;
 
-/** Visible on the board: the one definition both the list and the detail use. */
-export const PUBLIC_JOB_WHERE = `r.is_public AND r.status = 'Open' AND NOT t.is_test
+/**
+ * Visible on the board: the one definition both the list and the detail use. A job must
+ * also be approved by an admin (requisitions.approval_status, migration 026).
+ */
+export const PUBLIC_JOB_WHERE = `r.is_public AND r.status = 'Open' AND r.approval_status = 'approved' AND NOT t.is_test
   AND r.published_at IS NOT NULL AND (r.expires_at IS NULL OR r.expires_at > NOW())`;
 
 export const PUBLIC_JOB_SELECT = `

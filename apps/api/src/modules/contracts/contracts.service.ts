@@ -702,6 +702,15 @@ export class ContractsService implements OnModuleInit {
   }
 
   /**
+   * Buyer: submitted → released in one transaction (accepted_at and released_at both set),
+   * with the same release bookkeeping as release: released total, 'Escrow release' ledger
+   * row crediting the expert, completion once every milestone is settled.
+   */
+  approveAndRelease(id: string, milestoneId: string, user: User) {
+    return this.moveMilestone(id, milestoneId, 'approve_release', user);
+  }
+
+  /**
    * System: a delivered (submitted) milestone nobody reviewed in time is accepted and
    * released in one transaction, with the contract locked. Same bookkeeping as accept +
    * release by the buyer (released total, 'Escrow release' ledger row, completion), but the
@@ -753,6 +762,7 @@ export class ContractsService implements OnModuleInit {
         request_revision: `revision_count = revision_count + 1, revision_note = $3`,
         accept: `accepted_at = NOW()`,
         release: `released_at = NOW()`,
+        approve_release: `accepted_at = NOW(), released_at = NOW()`,
       }[action];
       const params: unknown[] = [milestoneId, milestone.status];
       if (note !== undefined) params.push(note.trim());
@@ -764,7 +774,7 @@ export class ContractsService implements OnModuleInit {
       if (hooks?.after) await hooks.after(client);
       const otherId = party.isBuyer ? contract.expert_id : contract.buyer_id;
       const title = `"${milestone.title}"`;
-      if (action !== 'release') {
+      if (action !== 'release' && action !== 'approve_release') {
         const text = {
           submit: `Milestone ${title} was submitted for your review`,
           request_revision: `Revision requested on milestone ${title}`,

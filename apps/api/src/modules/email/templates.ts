@@ -87,6 +87,11 @@ export interface TemplateData {
   'career-ack': { fullName: string; roleTitle: string };
   /** Support replied on a ticket. */
   'support-reply': { firstName: string; ticketId: string; subject: string; path: string };
+
+  'job-approval-decision': { firstName: string; jobTitle: string; decision: 'approved' | 'rejected'; note: string | null; path: string };
+
+  /** Recruiter outreach. Subject and body are the campaign's, already rendered as plain text. */
+  'outreach': { subject: string; body: string; companyName: string; unsubscribePath: string };
 }
 
 export type TemplateName = keyof TemplateData;
@@ -456,6 +461,34 @@ const TEMPLATES: { [K in TemplateName]: Renderer<TemplateData[K]> } = {
     [`The ASTEAI support team replied to your ticket ${ticketId} ("${subject}").`],
     baseUrl, { path, label: 'Read the reply' },
   ),
+
+  'job-approval-decision': ({ firstName, jobTitle, decision, note, path }, baseUrl) => notice(
+    decision === 'approved' ? `Your job "${oneLine(jobTitle)}" is approved` : `Your job "${oneLine(jobTitle)}" needs changes`,
+    firstName,
+    [
+      decision === 'approved'
+        ? `An AsteAI reviewer approved "${jobTitle}". If it is set to public and open, it now appears on the job board.`
+        : `An AsteAI reviewer could not approve "${jobTitle}" for the public job board yet. Update it and submit it again.`,
+      ...(note ? [`Note from the reviewer: ${note}`] : []),
+    ],
+    baseUrl,
+    { path, label: 'Open the requisition' },
+  ),
+
+  'outreach': ({ subject, body, companyName, unsubscribePath }, baseUrl) => {
+    const unsubscribe = siteUrl(baseUrl, unsubscribePath);
+    const paragraphs = body.split(/\n{2,}/).map((p) => p.trim()).filter(Boolean);
+    const footer = `You received this because ${companyName} contacted you about a role through AsteAI.`;
+    const html = [
+      ...paragraphs.map((p) => `<p>${escapeHtml(p).replace(/\n/g, '<br>')}</p>`),
+      `<p style="font-size:12px;color:#6b6e8a;">Not interested? <a href="${escapeHtml(unsubscribe)}" style="color:#6b6e8a;">Unsubscribe from ${escapeHtml(companyName)}</a>.</p>`,
+    ].join('');
+    return {
+      subject: oneLine(subject, 200),
+      html: layout(subject, html, footer),
+      text: [...paragraphs, `Unsubscribe from ${companyName}: ${unsubscribe}`, footer].join('\n\n'),
+    };
+  },
 
   'dispute-resolved': ({ firstName, disputeId, contractId, outcome, note, path }, baseUrl) => notice(
     `Dispute ${disputeId} has been resolved`,

@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Query, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { User } from '@asteai/types';
@@ -7,7 +7,9 @@ import { Roles } from '../../common/decorators/roles.decorator';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { paginate } from '../../common/utils/pagination';
 import { DisputesService } from './disputes.service';
-import { CreateDisputeDto, DisputeMessageDto, ListDisputesQueryDto, ResolveDisputeDto } from './dto/dispute.dto';
+import {
+  CreateDisputeDto, DisputeMessageDto, ListDisputesQueryDto, MilestoneDisputeDto, ResolveDisputeDto,
+} from './dto/dispute.dto';
 
 /**
  * Disputes on contracts. The two parties of the contract and admins only; the service
@@ -55,5 +57,28 @@ export class DisputesController {
   @ApiOperation({ summary: 'Resolve a dispute: release, refund, split or no action' })
   resolve(@Param('id') id: string, @Body() body: ResolveDisputeDto, @CurrentUser() user: User) {
     return this.svc.resolve(id, body, user);
+  }
+}
+
+/**
+ * The escrow flow's last step on one milestone: fund → submit_deliverable → approve_release,
+ * or → dispute. Same rules as POST /disputes with a milestoneId: the milestone must hold
+ * escrow, the contract is frozen until an admin resolves (release / refund / split).
+ */
+@ApiTags('contracts')
+@ApiBearerAuth()
+@UseGuards(AuthGuard('jwt'), RolesGuard)
+@Controller('contracts')
+export class MilestoneDisputesController {
+  constructor(private readonly svc: DisputesService) {}
+
+  @Post(':id/milestones/:mid/dispute')
+  @Roles('Buyer', 'Freelancer')
+  @ApiOperation({ summary: 'Dispute a funded milestone; freezes the contract until an admin resolves it' })
+  dispute(
+    @Param('id') id: string, @Param('mid', ParseUUIDPipe) mid: string,
+    @Body() body: MilestoneDisputeDto, @CurrentUser() user: User,
+  ) {
+    return this.svc.create({ contractId: id, milestoneId: mid, ...body }, user);
   }
 }

@@ -1,10 +1,11 @@
 import { BadRequestException, ConflictException, ForbiddenException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { Pool } from 'pg';
-import type { Proposal, User } from '@asteai/types';
+import type { CreateContractInput, Proposal, User } from '@asteai/types';
 import { DB_POOL, withTransaction } from '../../database/database.module';
 import { generateId } from '../../common/utils/ids';
 import { SubmitProposalDto } from './dto/submit-proposal.dto';
 import { mapProposalRow, ProposalRow } from './proposal.mapper';
+import { contractDraftFromSow, sowErrors } from './sow';
 
 /** A bid can only be awarded while the project is still collecting or shortlisting bids. */
 export const AWARDABLE_STAGES: readonly string[] = ['Open for Bids', 'Shortlisting'];
@@ -54,13 +55,18 @@ export class ProposalsService {
     if (!projectRows.length) throw new NotFoundException('Project not found');
     if (projectRows[0].stage !== 'Open for Bids') throw new BadRequestException('This project is not taking bids');
 
+    if (dto.sow) {
+      const errors = sowErrors(dto.sow, dto.price, dto.days);
+      if (errors.length) throw new BadRequestException(errors.join('; '));
+    }
+
     // Idempotent: a second bid (even a concurrent one) returns the existing proposal.
     const { rows } = await this.db.query<ProposalRow>(
-      `INSERT INTO proposals (id, project_id, expert_id, price, days, note)
-       VALUES ($1,$2,$3,$4,$5,$6)
+      `INSERT INTO proposals (id, project_id, expert_id, price, days, note, sow)
+       VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb)
        ON CONFLICT (project_id, expert_id) DO NOTHING
        RETURNING *`,
-      [generateId('P'), dto.projectId, user.id, dto.price, dto.days, dto.note ?? ''],
+      [generateId('P'), dto.projectId, user.id, dto.price, dto.days, dto.note ?? '', dto.sow ? JSON.stringify(dto.sow) : null],
     );
     if (rows.length) return mapProposalRow(rows[0]);
     const existing = await this.db.query<ProposalRow>(
@@ -117,5 +123,23 @@ export class ProposalsService {
       );
       return { awarded: true, projectId: proposal.project_id, expertId: proposal.expert_id };
     });
+  }
+
+  /**
+   * The POST /contracts body for an awarded proposal with a SOW: its milestones become the
+   * escrow milestones. The project's buyer (or an admin) only; the buyer reviews it and
+   * creates the contract, which both sides then sign.
+   */
+  async contractDraft(proposalId: string, user: User): Promise<CreateContractInput> {
+    const { rows } = await this.db.query<ProposalRow & { buyer_id: string }>(
+      `SELECT p.*, pr.buyer_id FROM proposals p JOIN projects pr ON pr.id = p.project_id WHERE p.id = $1`,
+      [proposalId],
+    );
+    const p = rows[0];
+    if (!p) throw new NotFoundException('Proposal not found');
+    if (p.buyer_id !== user.id && user.role !== 'Admin') throw new ForbiddenException();
+    if (p.status !== 'Awarded') throw new ConflictException('Award this proposal before drafting its contract');
+    if (!p.sow) throw new ConflictException('This proposal has no statement of work; set the milestones by hand');
+    return contractDraftFromSow({ id: p.id, price: Number(p.price), sow: p.sow }, new Date());
   }
 }

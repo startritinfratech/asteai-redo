@@ -21,6 +21,14 @@ export class AnalyticsController {
     return this.svc.getEmployerDashboard(user.tenantId);
   }
 
+  /** Live KPIs for the Hire workspace; admins without a company see the whole platform. */
+  @Get('employer/hiring-kpis')
+  @Roles('Employer', 'Admin')
+  hiringKpis(@CurrentUser() user: User) {
+    if (!user.tenantId && user.role !== 'Admin') return null;
+    return this.svc.getHiringKpis(user.tenantId ?? null);
+  }
+
   @Get('employer/fairness')
   @Roles('Employer', 'Admin')
   fairness(@CurrentUser() user: User) {

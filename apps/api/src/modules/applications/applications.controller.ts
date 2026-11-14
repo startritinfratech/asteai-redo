@@ -47,7 +47,7 @@ export class ApplicationsController {
     @CurrentUser() user: User,
   ) {
     const by = body.by ?? `${user.firstName} ${user.lastName}`.trim();
-    return this.svc.advanceStage(id, body.stage, by, user);
+    return this.svc.advanceStage(id, body.stage, by, user, { expectedStage: body.expectedStage, reason: body.reason });
   }
 
   @Post(':id/scorecards')

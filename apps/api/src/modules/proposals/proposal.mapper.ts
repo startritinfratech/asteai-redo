@@ -1,4 +1,4 @@
-import type { ProjectStage, Proposal, ProposalStatus } from '@asteai/types';
+import type { ProjectStage, Proposal, ProposalStatus, StatementOfWork } from '@asteai/types';
 
 export interface ProposalRow {
   id: string;
@@ -8,6 +8,7 @@ export interface ProposalRow {
   days: number;
   note: string | null;
   status: ProposalStatus;
+  sow?: StatementOfWork | null;
   created_at: Date | string;
   updated_at: Date | string;
   // joined by some queries
@@ -27,6 +28,7 @@ export function mapProposalRow(row: ProposalRow): Proposal {
     days: Number(row.days),
     note: row.note ?? '',
     status: row.status,
+    sow: row.sow ?? null,
     createdAt: new Date(row.created_at).toISOString(),
     updatedAt: new Date(row.updated_at).toISOString(),
     ...(row.expert_name !== undefined && { expertName: row.expert_name }),

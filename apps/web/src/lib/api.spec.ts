@@ -32,53 +32,65 @@ describe('refreshesOn401', () => {
   });
 });
 
-describe('apiRequest 401 handling', () => {
-  const store = new Map<string, string>();
-  const localStorageStub = {
-    getItem: (k: string) => store.get(k) ?? null,
-    setItem: (k: string, v: string) => void store.set(k, v),
-    removeItem: (k: string) => void store.delete(k),
-  };
+describe('apiRequest 401 handling (HttpOnly cookie session)', () => {
   const g = globalThis as Record<string, unknown>;
   const realFetch = globalThis.fetch;
-  let calls: string[];
+  let calls: { path: string; init?: RequestInit }[];
+  /** Whether the "browser" holds a fresh access cookie (set by a successful refresh). */
+  let fresh: boolean;
+  let refreshOk: boolean;
 
   beforeEach(() => {
-    store.clear();
-    store.set('accessToken', 'old-access');
-    store.set('refreshToken', 'rt-1');
-    store.set('userId', 'u1');
-    g.window = { localStorage: localStorageStub };
-    g.localStorage = localStorageStub;
+    g.document = { cookie: 'theme=dark; asteai_session=1' };
     calls = [];
+    fresh = false;
+    refreshOk = true;
     globalThis.fetch = (async (input: string, init?: RequestInit) => {
-      const url = String(input);
-      calls.push(url);
-      if (url.endsWith('/auth/refresh')) {
-        return new Response(JSON.stringify({ data: { accessToken: 'new-access', refreshToken: 'rt-2' } }), { status: 200 });
+      const path = String(input).replace(/^.*\/api\/v1/, '');
+      calls.push({ path, init });
+      if (path === '/auth/refresh') {
+        if (refreshOk) fresh = true;
+        return new Response(null, { status: refreshOk ? 200 : 401 });
       }
-      const auth = new Headers(init?.headers).get('Authorization');
-      if (auth === 'Bearer new-access') return new Response(JSON.stringify({ data: { ok: true } }), { status: 200 });
+      if (fresh) return new Response(JSON.stringify({ data: { ok: true } }), { status: 200 });
       return new Response(JSON.stringify({ message: 'Unauthorized' }), { status: 401 });
     }) as typeof fetch;
   });
 
   afterEach(() => {
     globalThis.fetch = realFetch;
-    delete g.window;
-    delete g.localStorage;
+    delete g.document;
   });
 
-  test('a signed-in /auth/* endpoint refreshes and retries', async () => {
+  test('sends cookies, never an Authorization header', async () => {
+    fresh = true;
+    await api.get('/users/me');
+    assert.equal(calls[0].init?.credentials, 'include');
+    assert.equal(new Headers(calls[0].init?.headers).get('Authorization'), null);
+  });
+
+  test('a signed-in /auth/* endpoint refreshes (cookie only, no body) and retries', async () => {
     assert.deepEqual(await api.get('/auth/2fa'), { ok: true });
-    assert.deepEqual(calls.map((u) => u.replace(/^.*\/api\/v1/, '')), ['/auth/2fa', '/auth/refresh', '/auth/2fa']);
-    assert.equal(store.get('refreshToken'), 'rt-2');
+    assert.deepEqual(calls.map((c) => c.path), ['/auth/2fa', '/auth/refresh', '/auth/2fa']);
+    assert.equal(calls[1].init?.credentials, 'include');
+    assert.equal(calls[1].init?.body, undefined);
   });
 
   test('a public auth endpoint returns its 401 without refreshing', async () => {
     await assert.rejects(api.post('/auth/login', { email: 'a@b.c', password: 'x' }), (err: unknown) =>
       err instanceof ApiError && err.status === 401 && err.message === 'Unauthorized');
-    assert.deepEqual(calls.map((u) => u.replace(/^.*\/api\/v1/, '')), ['/auth/login']);
-    assert.equal(store.get('accessToken'), 'old-access');
+    assert.deepEqual(calls.map((c) => c.path), ['/auth/login']);
+  });
+
+  test('an anonymous visitor (no session hint cookie) never triggers a refresh', async () => {
+    (g.document as { cookie: string }).cookie = 'theme=dark';
+    await assert.rejects(api.get('/users/me'), (err: unknown) => err instanceof ApiError && err.status === 401);
+    assert.deepEqual(calls.map((c) => c.path), ['/users/me']);
+  });
+
+  test('a refused refresh still retries once (another tab may have rotated the cookies)', async () => {
+    refreshOk = false;
+    await assert.rejects(api.get('/users/me'), (err: unknown) => err instanceof ApiError && err.status === 401);
+    assert.deepEqual(calls.map((c) => c.path), ['/users/me', '/auth/refresh', '/users/me']);
   });
 });

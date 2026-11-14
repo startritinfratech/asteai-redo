@@ -11,6 +11,9 @@ import { AccountController } from './account.controller';
 import { AccountSecurityService } from './account-security.service';
 import { TwoFactorService } from './two-factor.service';
 import { SignupOtpService } from './signup-otp.service';
+import { SessionCookieInterceptor } from './session-cookie.interceptor';
+import { OAuthController } from './oauth/oauth.controller';
+import { OAuthService } from './oauth/oauth.service';
 
 @Module({
   imports: [
@@ -24,8 +27,11 @@ import { SignupOtpService } from './signup-otp.service';
       }),
     }),
   ],
-  controllers: [AuthController, AccountController],
-  providers: [AuthService, AccountSecurityService, TwoFactorService, SignupOtpService, LocalStrategy, JwtStrategy],
+  controllers: [AuthController, AccountController, OAuthController],
+  providers: [
+    AuthService, AccountSecurityService, TwoFactorService, SignupOtpService, LocalStrategy, JwtStrategy,
+    SessionCookieInterceptor, OAuthService,
+  ],
   exports: [AuthService, AccountSecurityService, TwoFactorService, JwtModule],
 })
 export class AuthModule {}

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { io, type Socket } from 'socket.io-client';
 import { api } from '@/lib/api';
-import { tokenStorage } from '@/lib/tokens';
+import { hasSessionHint } from '@/lib/tokens';
 import type { ChatMessage, ChatReadEvent, ChatTypingEvent } from './types';
 
 /** socket.io does not go through the Next.js /api rewrite, so it talks to the API host directly. */
@@ -50,7 +50,8 @@ export function useChatSocket(handlers: ChatSocketHandlers, enabled = true) {
     let retryTimer: ReturnType<typeof setTimeout> | null = null;
 
     const socket = io(`${SOCKET_BASE}/chats`, {
-      auth: (cb) => cb({ token: tokenStorage.getAccessToken() ?? '' }),
+      // The handshake carries the HttpOnly access cookie; the page never sees the token.
+      withCredentials: true,
       transports: ['websocket', 'polling'],
       reconnectionDelay: 1_000,
       reconnectionDelayMax: 15_000,
@@ -65,17 +66,17 @@ export function useChatSocket(handlers: ChatSocketHandlers, enabled = true) {
       }, ms);
     };
 
-    /** Lets the API client refresh an expired access token, then reconnects with the new one. */
+    /** Lets the API client refresh an expired session (new cookies), then reconnects. */
     const refreshAndReconnect = async () => {
-      const before = tokenStorage.getAccessToken();
+      let ok = false;
       try {
         await api.get('/users/me');
+        ok = true;
       } catch {
         // Signed out or offline: polling (and the session-expired handler) take over.
       }
-      if (cancelled || !tokenStorage.getAccessToken()) return;
-      const refreshed = tokenStorage.getAccessToken() !== before;
-      scheduleReconnect(refreshed ? 0 : Math.min(30_000, 2_000 * 2 ** Math.min(failures, 4)));
+      if (cancelled || !hasSessionHint()) return;
+      scheduleReconnect(ok && failures <= 1 ? 0 : Math.min(30_000, 2_000 * 2 ** Math.min(failures, 4)));
     };
 
     const onConnect = () => {
