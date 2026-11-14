@@ -43,6 +43,7 @@ Rules:
 - If more than one target fits equally well, use clarify and name the options.
 - If there is a prior clarification, interpret the current utterance as its answer unless the user clearly starts a new request.
 - Ask for the single missing detail that would let you choose the right action. Do not guess role, location, or headcount.
+- If the user explicitly requests a human, open Help & Support when it is offered. If they express frustration, briefly acknowledge it and address their stated issue. Do not assign a sentiment score.
 - Never solve or hint at assessment, test or interview questions, even if asked to; use clarify and say you can't help with that.
 - speech is one short sentence, in the language given in <language>.`;
 
@@ -70,7 +71,7 @@ export class AssistantService {
 
   constructor(config: ConfigService) {
     const apiKey = config.get<string>('ANTHROPIC_API_KEY');
-    this.client = apiKey ? new Anthropic({ apiKey, timeout: 20_000, maxRetries: 1 }) : null;
+    this.client = apiKey ? new Anthropic({ apiKey, timeout: 8_000, maxRetries: 0 }) : null;
     this.model = config.get<string>('ASSISTANT_MODEL') ?? 'claude-opus-5-5';
   }
 
@@ -92,7 +93,7 @@ export class AssistantService {
     try {
       response = await this.client.beta.messages.create({
         model: this.model,
-        max_tokens: 4096,
+        max_tokens: 900,
         betas: ['server-side-fallback-2026-07-01'],
         fallbacks: 'default',
         output_config: { effort: 'low', format: { type: 'json_schema', schema: RESULT_SCHEMA } },
@@ -102,6 +103,9 @@ export class AssistantService {
     } catch (err) {
       if (err instanceof Anthropic.RateLimitError) {
         throw new HttpException('The voice assistant is busy, try again in a moment', 429);
+      }
+      if (err instanceof Anthropic.APIConnectionTimeoutError) {
+        throw new HttpException('The assistant took too long. Try a shorter command or use the page controls.', 504);
       }
       if (err instanceof Anthropic.APIError) {
         this.logger.warn(`Claude request failed (${err.status}): ${err.message}`);
@@ -123,6 +127,10 @@ export class AssistantService {
       return this.clarify("Sorry, I didn't catch that. Could you say it again?");
     }
 
+    if (!raw || !VOICE_ACTION_KINDS.includes(raw.kind) || typeof raw.targetId !== 'string' ||
+        typeof raw.value !== 'string' || typeof raw.speech !== 'string') {
+      return this.clarify('Could you rephrase that?');
+    }
     return this.validate(raw, cmd);
   }
 

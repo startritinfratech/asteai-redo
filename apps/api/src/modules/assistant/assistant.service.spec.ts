@@ -1,6 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { HttpException } from '@nestjs/common';
+import Anthropic from '@anthropic-ai/sdk';
 import type { ConfigService } from '@nestjs/config';
 import type { User } from '@asteai/types';
 import { AssistantService } from './assistant.service';
@@ -58,6 +59,7 @@ describe('AssistantService', () => {
 
     const params = calls[0];
     assert.equal(params.model, 'claude-opus-5-5');
+    assert.equal(params.max_tokens, 900);
     assert.equal(params.fallbacks, 'default');
     assert.deepEqual(params.betas, ['server-side-fallback-2026-07-01']);
     const content = (params.messages as { content: string }[])[0].content;
@@ -83,6 +85,20 @@ describe('AssistantService', () => {
     const result = await svc.resolve(user, cmd);
     assert.equal(result.kind, 'clarify');
     assert.equal(result.targetId, null);
+  });
+
+  it('clarifies when valid JSON does not match the command schema', async () => {
+    const { svc } = serviceReplying({ kind: 'drop', targetId: 'route:requisitions', speech: 'Done.' });
+    assert.equal((await svc.resolve(user, cmd)).kind, 'clarify');
+  });
+
+  it('turns an upstream timeout into an actionable 504', async () => {
+    const svc = new AssistantService(config({ ANTHROPIC_API_KEY: 'test-key' }));
+    (svc as unknown as { client: unknown }).client = {
+      beta: { messages: { create: async () => { throw new Anthropic.APIConnectionTimeoutError(); } } },
+    };
+    await assert.rejects(svc.resolve(user, cmd), (err: HttpException) =>
+      err.getStatus() === 504 && err.message.includes('shorter command'));
   });
 
   it('sends the previous clarification with the current answer', async () => {

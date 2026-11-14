@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import type { VoiceTarget } from '@asteai/types';
-import { matchLocally } from './localIntent';
+import { confirmationReply, matchLocally, spokenInteger } from './localIntent';
 
 const targets: VoiceTarget[] = [
   { id: 'route:applications', kind: 'route', label: 'My Applications' },
@@ -41,5 +41,36 @@ describe('matchLocally', () => {
   it('leaves unknown pages and questions to the server', () => {
     assert.equal(matchLocally('open settings', targets), null);
     assert.equal(matchLocally('what is a passport?', targets), null);
+  });
+
+  it('clarifies a hiring request and handles the short route answer locally', () => {
+    const hiring: VoiceTarget[] = [
+      { id: 'route:pipeline', kind: 'route', label: 'Applications Pipeline' },
+      { id: 'route:pools', kind: 'route', label: 'Talent CRM' },
+    ];
+    assert.equal(matchLocally('Where can I see candidates?', hiring)?.kind, 'clarify');
+    assert.equal(matchLocally('The talent pool.', hiring, true)?.targetId, 'route:pools');
+    assert.equal(matchLocally('award', targets, true), null);
+  });
+
+  it('routes requests only to available job and support actions', () => {
+    const employer: VoiceTarget[] = [
+      { id: 'route:hire/job-creator', kind: 'route', label: 'AI Job Creator' },
+      { id: 'route:support', kind: 'route', label: 'Help & Support' },
+      { id: 'action:job-creator.generate', kind: 'action', label: 'Generate job (5 credits)', confirm: true },
+    ];
+    assert.equal(matchLocally('I want to post a job', employer)?.targetId, 'route:hire/job-creator');
+    assert.equal(matchLocally('I want to post a job', targets), null);
+    assert.equal(matchLocally('Can you speak to a human?', employer)?.targetId, 'route:support');
+    assert.equal(matchLocally('Generate job', employer)?.needsConfirmation, true);
+  });
+
+  it('uses explicit confirmation and handles common spoken headcounts', () => {
+    assert.equal(confirmationReply('Yes, do it.'), 'confirm');
+    assert.equal(confirmationReply('No, do not confirm.'), null);
+    assert.equal(confirmationReply('Cancel.'), 'cancel');
+    assert.equal(spokenInteger('two'), 2);
+    assert.equal(spokenInteger('20'), 20);
+    assert.equal(spokenInteger('2.5'), -1);
   });
 });

@@ -7,6 +7,7 @@ import { api, errorMessage } from '@/lib/api';
 import { fetchAllRequisitions } from '@/lib/requisitions';
 import { Button, Empty, Eyebrow, Field, KPI, Panel, Tag, type TagColor } from '@/components/ui';
 import { useVoiceTargets, type RegisteredTarget } from '@/features/voice-assistant';
+import { spokenInteger } from '@/features/voice-assistant/localIntent';
 import styles from './requisitions.module.css';
 
 const STATUS_COLOR: Record<ReqStatus, TagColor> = {
@@ -144,10 +145,11 @@ function NewRequisitionForm({ onCancel, onCreated }: { onCancel: () => void; onC
     {
       id: 'field:requisitions.headcount', kind: 'field', label: 'Headcount',
       run: (value) => {
-        if (!/^\d+$/.test(value ?? '') || Number(value) < 1 || Number(value) > 10000) {
-          throw new Error('Enter a headcount between 1 and 10,000 in digits.');
+        const headcount = spokenInteger(value);
+        if (headcount < 1 || headcount > 10000) {
+          throw new Error('Enter a headcount between 1 and 10,000.');
         }
-        setHeadcount(Number(value));
+        setHeadcount(headcount);
       },
     },
     {

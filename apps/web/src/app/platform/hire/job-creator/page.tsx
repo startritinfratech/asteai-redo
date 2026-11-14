@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import useSWR from 'swr';
 import {
   JOB_BANDS, type GeneratedJob, type JobBand, type PublicCreditSettings, type Requisition,
@@ -10,6 +10,7 @@ import { ApiError, errorMessage, fetcher } from '@/lib/api';
 import { Button, Empty, PageHeader, Panel, Tag } from '@/components/ui';
 import { HIRE_KEYS, hireApi } from '@/features/hire/api';
 import { jobToRequisition, type PublishDetails } from '@/features/hire/format';
+import { useVoiceTargets } from '@/features/voice-assistant';
 import styles from '@/features/hire/Hire.module.css';
 
 const TIERS: PublishDetails['tier'][] = ['Technical', 'Non-Technical', 'Frontline', 'Skilled'];
@@ -29,8 +30,11 @@ export default function JobCreatorPage() {
   const [error, setError] = useState<{ text: string; credits?: boolean } | null>(null);
   const [job, setJob] = useState<GeneratedJob | null>(null);
   const [balance, setBalance] = useState<number | null>(null);
+  const generating = useRef(false);
 
   async function generate() {
+    if (generating.current || prompt.trim().length < 10) return false;
+    generating.current = true;
     setBusy(true);
     setError(null);
     try {
@@ -40,12 +44,36 @@ export default function JobCreatorPage() {
       });
       setJob(res.job);
       setBalance(res.credits.balance);
+      return true;
     } catch (err) {
       setError({ text: errorMessage(err, 'Generation failed'), credits: err instanceof ApiError && err.status === 402 });
+      return false;
     } finally {
+      generating.current = false;
       setBusy(false);
     }
   }
+
+  useVoiceTargets(busy ? [] : [
+    {
+      id: 'field:job-creator.brief', kind: 'field', label: 'Job brief',
+      description: 'Describe the role, experience, skills, and working conditions.',
+      run: (value) => {
+        if (!value?.trim() || value.length > 2000) return false;
+        setPrompt(value);
+      },
+    },
+    ...(cost !== undefined && prompt.trim().length >= 10 ? [{
+      id: 'action:job-creator.generate',
+      kind: 'action' as const,
+      label: `Generate job (${cost} credits)`,
+      description: 'Generate the job description and screening questions using account credits.',
+      confirm: true,
+      run: async () => {
+        if (!(await generate())) throw new Error('Could not generate the job. Check the message in AI Job Creator.');
+      },
+    }] : []),
+  ]);
 
   return (
     <>
